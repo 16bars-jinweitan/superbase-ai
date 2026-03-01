@@ -1,8 +1,6 @@
 -- Coke ON Analytics POC — PostgreSQL schema for Supabase
 -- Run this in the Supabase SQL Editor before importing CSVs.
 
-TRUNCATE TABLE campaign_segment_performance, user_metrics, app_interactions, sales, machines, users RESTART IDENTITY CASCADE;
-
 CREATE TABLE IF NOT EXISTS users (
     user_id       TEXT PRIMARY KEY,
     join_date     DATE NOT NULL,
@@ -60,3 +58,5 @@ CREATE TABLE IF NOT EXISTS campaign_segment_performance (
     engagement_rate  NUMERIC NOT NULL,
     PRIMARY KEY (campaign_id, age_group, gender, quarter)
 );
+
+TRUNCATE TABLE campaign_segment_performance, user_metrics, app_interactions, sales, machines, users RESTART IDENTITY CASCADE;

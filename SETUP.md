@@ -25,7 +25,7 @@ Supabase is cloud-hosted — no local install needed.
 | `user_metrics` | `data/user_metrics.csv` |
 | `campaign_segment_performance` | `data/campaign_segment_performance.csv` |
 
-4. Copy your **Project URL** (`https://<ref>.supabase.co`) and **service_role key** from **Project Settings → API**.
+4. Data is now in Supabase. No credentials needed here — the MCP connection is configured in n8n in step 4.
 
 ## 3. Import workflow into n8n
 
@@ -35,15 +35,9 @@ Go to **n8n → Workflows → Import from file** and select `n8n/workflow.json`.
 
 **LLM sub-node** — The workflow defaults to OpenAI / GPT-4o. To swap providers, delete the "OpenAI Chat Model" sub-node and add your preferred LLM node, then reconnect it to the agent's `ai_languageModel` input.
 
-**Supabase MCP sub-node** — The MCP server runs locally on your machine and connects to your cloud Supabase project. Start it before running the n8n workflow:
+**Supabase MCP sub-node** — The Supabase MCP is configured as a tool node connected to the AI Agent node inside n8n. Credentials are stored in n8n's credential manager — no separate process needs to be started.
 
-```bash
-SUPABASE_URL=https://<ref>.supabase.co \
-SUPABASE_KEY=<your-service_role-key> \
-npx @supabase/mcp-server-supabase@latest --port 3000
-```
-
-The SSE endpoint is pre-configured in the workflow as `http://localhost:3000/sse`. No credential entry is needed in n8n — authentication is handled by the MCP server process.
+In n8n, create a **Header Auth** credential containing your Supabase personal access token (get it from [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens)), then assign it to the **Supabase MCP** tool node. The node connects to `https://mcp.supabase.com/sse`.
 
 ## 5. Configure the frontend
 

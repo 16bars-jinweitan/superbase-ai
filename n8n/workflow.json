@@ -77,8 +77,8 @@
     {
       "parameters": {
         "connectionType": "sse",
-        "sseEndpoint": "http://localhost:3000/sse",
-        "authentication": "none",
+        "sseEndpoint": "https://mcp.supabase.com/sse",
+        "authentication": "headerAuth",
         "toolsToInclude": "selected",
         "includedTools": [
           "execute_sql",
@@ -90,7 +90,13 @@
       "name": "Supabase MCP",
       "type": "@n8n/n8n-nodes-langchain.toolMcpClient",
       "typeVersion": 1,
-      "position": [580, 500]
+      "position": [580, 500],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "REPLACE_WITH_YOUR_SUPABASE_CREDENTIAL_ID",
+          "name": "Supabase PAT"
+        }
+      }
     }
   ],
   "connections": {
