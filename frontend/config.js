@@ -2,5 +2,5 @@
 // Edit this file to match your local environment.
 
 const CONFIG = {
-  WEBHOOK_URL: "http://localhost:5678/webhook/coke-on-query",
+  WEBHOOK_URL: "https://n8n.volcanobase.co/webhook/coke-on-query",
 };

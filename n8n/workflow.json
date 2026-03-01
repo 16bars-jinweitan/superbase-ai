@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "agent": "conversationalAgent",
+        "agent": "toolsAgent",
         "promptType": "define",
         "text": "={{ $json.body.query }}",
         "options": {
@@ -77,7 +77,7 @@
     {
       "parameters": {
         "connectionType": "sse",
-        "sseEndpoint": "https://mcp.supabase.com/sse",
+        "sseEndpoint": "https://mcp.supabase.com/mcp?project_ref=stjuuvzwpdlwtzywpcra&read_only=true&features=database",
         "authentication": "headerAuth",
         "toolsToInclude": "selected",
         "includedTools": [

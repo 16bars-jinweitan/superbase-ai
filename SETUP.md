@@ -37,15 +37,18 @@ Go to **n8n → Workflows → Import from file** and select `n8n/workflow.json`.
 
 **Supabase MCP sub-node** — The Supabase MCP is configured as a tool node connected to the AI Agent node inside n8n. Credentials are stored in n8n's credential manager — no separate process needs to be started.
 
-In n8n, create a **Header Auth** credential containing your Supabase personal access token (get it from [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens)), then assign it to the **Supabase MCP** tool node. The node connects to `https://mcp.supabase.com/sse`.
+In n8n, create a **Header Auth** credential containing your Supabase personal access token (get it from [supabase.com/dashboard/account/tokens](https://supabase.com/dashboard/account/tokens)), then assign it to the **Supabase MCP** tool node. The node connects to:
+```
+https://mcp.supabase.com/mcp?project_ref=<your-project-ref>&read_only=true&features=database
+```
 
 ## 5. Configure the frontend
 
-If n8n runs on a port other than **5678**, update `frontend/config.js`:
+The webhook URL is already set in `frontend/config.js`. No changes needed unless you redeploy n8n to a different host.
 
 ```js
 const CONFIG = {
-  WEBHOOK_URL: "http://localhost:5678/webhook/coke-on-query",
+  WEBHOOK_URL: "https://n8n.volcanobase.co/webhook/coke-on-query",
 };
 ```
 
@@ -53,16 +56,21 @@ const CONFIG = {
 
 Open `frontend/index.html` directly in a browser (no server needed).
 
-Or test the webhook directly:
+Or test the webhook directly (use the test URL while the workflow is open in n8n, production URL otherwise):
 
 ```bash
-# English
-curl -X POST http://localhost:5678/webhook/coke-on-query \
+# English (production)
+curl -X POST https://n8n.volcanobase.co/webhook/coke-on-query \
+  -H "Content-Type: application/json" \
+  -d '{"query":"Which are the top 10 vending machines by sales?","language":"en"}'
+
+# English (test — workflow must be open in n8n)
+curl -X POST https://n8n.volcanobase.co/webhook-test/coke-on-query \
   -H "Content-Type: application/json" \
   -d '{"query":"Which are the top 10 vending machines by sales?","language":"en"}'
 
 # Japanese
-curl -X POST http://localhost:5678/webhook/coke-on-query \
+curl -X POST https://n8n.volcanobase.co/webhook/coke-on-query \
   -H "Content-Type: application/json" \
   -d '{"query":"販売数トップ10の自動販売機はどれですか？","language":"ja"}'
 ```
