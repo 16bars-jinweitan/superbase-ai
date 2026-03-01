@@ -1,0 +1,51 @@
+machine_id,location,area_type,footfall_tier,footfall_index
+MACH-001,Hyogo,Residential,Medium,48
+MACH-002,Hyogo,Office District,Medium,56
+MACH-003,Kyoto,Retail,Medium,48
+MACH-004,Chiba,Tourist,Medium,42
+MACH-005,Saitama,Tourist,Medium,50
+MACH-006,Fukuoka,Retail,High,82
+MACH-007,Fukuoka,Office District,Medium,53
+MACH-008,Osaka,Office District,Medium,57
+MACH-009,Tokyo,Residential,High,98
+MACH-010,Hokkaido,Residential,Low,28
+MACH-011,Osaka,Office District,Low,34
+MACH-012,Tokyo,Residential,High,71
+MACH-013,Fukuoka,Transit Hub,High,74
+MACH-014,Aichi,Residential,High,88
+MACH-015,Tokyo,Transit Hub,High,74
+MACH-016,Aichi,University,High,88
+MACH-017,Hokkaido,Office District,Medium,56
+MACH-018,Chiba,Tourist,High,100
+MACH-019,Chiba,Transit Hub,Low,19
+MACH-020,Fukuoka,Transit Hub,Medium,45
+MACH-021,Fukuoka,Retail,Medium,46
+MACH-022,Hokkaido,Residential,Medium,38
+MACH-023,Saitama,Retail,High,72
+MACH-024,Tokyo,Transit Hub,High,94
+MACH-025,Saitama,Office District,Low,25
+MACH-026,Aichi,Office District,Low,5
+MACH-027,Saitama,Residential,High,71
+MACH-028,Kanagawa,Retail,High,89
+MACH-029,Fukuoka,Transit Hub,Low,5
+MACH-030,Saitama,Transit Hub,High,70
+MACH-031,Tokyo,Retail,High,87
+MACH-032,Aichi,Tourist,Low,31
+MACH-033,Tokyo,Transit Hub,Medium,46
+MACH-034,Kanagawa,Office District,Medium,44
+MACH-035,Osaka,University,Medium,51
+MACH-036,Kyoto,Transit Hub,Low,17
+MACH-037,Kyoto,Residential,Medium,64
+MACH-038,Hokkaido,Office District,Low,12
+MACH-039,Hokkaido,Tourist,Medium,40
+MACH-040,Aichi,Transit Hub,High,94
+MACH-041,Tokyo,Residential,Medium,59
+MACH-042,Tokyo,Tourist,Medium,35
+MACH-043,Chiba,Office District,High,97
+MACH-044,Kyoto,Retail,High,88
+MACH-045,Tokyo,Residential,High,98
+MACH-046,Saitama,Retail,Medium,48
+MACH-047,Tokyo,Residential,High,88
+MACH-048,Osaka,Tourist,Medium,39
+MACH-049,Tokyo,Residential,Low,22
+MACH-050,Tokyo,University,High,99

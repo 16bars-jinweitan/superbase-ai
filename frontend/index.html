@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Coke ON Analytics</title>
+  <script src="config.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap"
+    rel="stylesheet"
+  />
+  <style>
+    /* ── Reset & base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --red:    #E61A1A;
+      --red-dk: #B81515;
+      --bg:     #F5F5F5;
+      --white:  #FFFFFF;
+      --border: #DDDDDD;
+      --text:   #1A1A1A;
+      --muted:  #666666;
+      --radius: 8px;
+    }
+
+    body {
+      font-family: "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--red);
+      color: var(--white);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo svg { width: 32px; height: 32px; flex-shrink: 0; }
+
+    .logo-text {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+
+    /* ── Language toggle ── */
+    .lang-toggle {
+      display: flex;
+      background: rgba(255,255,255,0.18);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .lang-btn {
+      border: none;
+      background: transparent;
+      color: rgba(255,255,255,0.75);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 700;
+      padding: 6px 14px;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .lang-btn.active {
+      background: rgba(255,255,255,0.95);
+      color: var(--red);
+    }
+
+    /* ── Main ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 40px 16px 60px;
+    }
+
+    .card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 780px;
+      padding: 28px 28px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .card-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Suggested questions ── */
+    .suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }
+
+    .suggestion-chip {
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      background: var(--white);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.8rem;
+      padding: 5px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      text-align: left;
+    }
+
+    .suggestion-chip:hover {
+      border-color: var(--red);
+      background: #FFF5F5;
+    }
+
+    /* ── Query area ── */
+    .query-row {
+      display: flex;
+      gap: 10px;
+    }
+
+    textarea {
+      flex: 1;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      resize: vertical;
+      min-height: 80px;
+      line-height: 1.5;
+      transition: border-color 0.15s;
+      color: var(--text);
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: var(--red);
+    }
+
+    .submit-btn {
+      align-self: flex-end;
+      background: var(--red);
+      color: var(--white);
+      border: none;
+      border-radius: var(--radius);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 700;
+      padding: 12px 22px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 0.15s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .submit-btn:hover:not(:disabled) { background: var(--red-dk); }
+    .submit-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* ── Spinner ── */
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Response area ── */
+    .response-card {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      width: 100%;
+      max-width: 780px;
+      margin-top: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      overflow: hidden;
+      display: none;
+    }
+
+    .response-header {
+      background: #FAFAFA;
+      border-bottom: 1px solid var(--border);
+      padding: 10px 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .response-body {
+      padding: 20px 24px;
+      font-size: 0.92rem;
+      line-height: 1.75;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Markdown-ish table rendering */
+    .response-body table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 12px 0;
+      font-size: 0.88rem;
+    }
+
+    .response-body th, .response-body td {
+      border: 1px solid var(--border);
+      padding: 7px 12px;
+      text-align: left;
+    }
+
+    .response-body th {
+      background: #F0F0F0;
+      font-weight: 700;
+    }
+
+    .response-body.error { color: #CC0000; }
+
+    /* Loading skeleton */
+    .skeleton-line {
+      height: 14px;
+      background: linear-gradient(90deg, #EEE 25%, #E0E0E0 50%, #EEE 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.2s infinite;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    @keyframes shimmer { to { background-position: -200% 0; } }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      padding: 16px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <!-- Coca-Cola bottle silhouette SVG -->
+    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <circle cx="16" cy="16" r="15" fill="white" fill-opacity="0.2"/>
+      <text x="16" y="21" text-anchor="middle" font-size="14" font-weight="bold" fill="white" font-family="sans-serif">ON</text>
+    </svg>
+    <span class="logo-text" data-i18n="title">Coke ON Analytics</span>
+  </div>
+  <div class="lang-toggle" role="group" aria-label="Language">
+    <button class="lang-btn active" data-lang="en" onclick="setLang('en')">EN</button>
+    <button class="lang-btn" data-lang="ja" onclick="setLang('ja')">JP</button>
+  </div>
+</header>
+
+<main>
+  <div class="card">
+    <div class="card-title" data-i18n="suggestionsLabel">Try asking</div>
+
+    <div class="suggestions" id="suggestions"></div>
+
+    <div class="query-row">
+      <textarea
+        id="queryInput"
+        rows="3"
+        data-i18n-placeholder="placeholder"
+      ></textarea>
+      <button class="submit-btn" id="submitBtn" onclick="submitQuery()">
+        <span class="spinner" id="spinner"></span>
+        <span data-i18n="submit">Ask</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="response-card" id="responseCard">
+    <div class="response-header" data-i18n="responseLabel">Answer</div>
+    <div class="response-body" id="responseBody"></div>
+  </div>
+</main>
+
+<footer>
+  <span data-i18n="footer">Coke ON Analytics POC — synthetic data only</span>
+</footer>
+
+<script>
+  // ── Config ────────────────────────────────────────────────────────────────
+  // Edit frontend/config.js to change the webhook URL.
+  const WEBHOOK_URL = CONFIG.WEBHOOK_URL;
+
+  // ── i18n strings ─────────────────────────────────────────────────────────
+  const STRINGS = {
+    en: {
+      title: "Coke ON Analytics",
+      suggestionsLabel: "Try asking",
+      placeholder: "Ask a question about Coke ON users, sales, or app activity…",
+      submit: "Ask",
+      responseLabel: "Answer",
+      footer: "Coke ON Analytics POC — synthetic data only",
+      loading: "Thinking…",
+      errorNetwork: "Could not reach the analytics service. Is n8n running?",
+      errorServer: "The service returned an error. Please try again.",
+    },
+    ja: {
+      title: "Coke ON アナリティクス",
+      suggestionsLabel: "例えばこんな質問",
+      placeholder: "Coke ONのユーザー、売上、アプリ活動について質問してください…",
+      submit: "質問する",
+      responseLabel: "回答",
+      footer: "Coke ON アナリティクス POC — 合成データのみ",
+      loading: "考え中…",
+      errorNetwork: "サービスに接続できません。n8nは起動していますか？",
+      errorServer: "サービスでエラーが発生しました。もう一度お試しください。",
+    },
+  };
+
+  const SUGGESTIONS = {
+    en: [
+      // Analytic
+      "What is the current Coke ON user funnel breakdown?",
+      "Show month-to-month Georgia Coffee sales for the last 6 months",
+      "Which are the top 10 vending machines by sales volume?",
+      "What are the most popular campaigns in the last 6 months?",
+      // Predictive & recommendation
+      "Predict the most popular drinks in Kyoto this August",
+      "Which vending machines have the highest recovery potential based on footfall?",
+      "Which user segments are showing early churn signals and what's the recommended intervention?",
+      "Which campaigns should we prioritise for 25–34 female users in Q3?",
+    ],
+    ja: [
+      // 分析系
+      "現在のCoke ONユーザーファネルの内訳を教えてください",
+      "過去6ヶ月のジョージアコーヒーの月別売上を見せてください",
+      "販売数トップ10の自動販売機はどれですか？",
+      "過去6ヶ月で最も人気のキャンペーンを教えてください",
+      // 予測・レコメンデーション系
+      "今年8月に京都で最も人気になる飲料を予測してください",
+      "集客ポテンシャルを考慮した回復余地の高い自販機はどれですか？",
+      "早期解約シグナルを示しているユーザーセグメントと推奨施策を教えてください",
+      "Q3の25〜34歳女性セグメントに向けて優先すべきキャンペーンはどれですか？",
+    ],
+  };
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let currentLang = "en";
+  let isLoading = false;
+
+  // ── Language ──────────────────────────────────────────────────────────────
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+
+    // Update active button
+    document.querySelectorAll(".lang-btn").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.lang === lang);
+    });
+
+    // Update all i18n text nodes
+    const strings = STRINGS[lang];
+    document.querySelectorAll("[data-i18n]").forEach((el) => {
+      el.textContent = strings[el.dataset.i18n] ?? el.textContent;
+    });
+
+    // Update placeholders
+    document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+      el.placeholder = strings[el.dataset.i18nPlaceholder] ?? "";
+    });
+
+    // Re-render suggestions
+    renderSuggestions();
+  }
+
+  function renderSuggestions() {
+    const container = document.getElementById("suggestions");
+    container.innerHTML = "";
+    SUGGESTIONS[currentLang].forEach((text) => {
+      const btn = document.createElement("button");
+      btn.className = "suggestion-chip";
+      btn.textContent = text;
+      btn.onclick = () => {
+        document.getElementById("queryInput").value = text;
+        document.getElementById("queryInput").focus();
+      };
+      container.appendChild(btn);
+    });
+  }
+
+  // ── Markdown table renderer ───────────────────────────────────────────────
+  function renderMarkdown(text) {
+    // Detect and convert markdown tables
+    const lines = text.split("\n");
+    let html = "";
+    let inTable = false;
+    let tableLines = [];
+
+    function flushTable() {
+      if (tableLines.length < 2) {
+        html += tableLines.join("\n") + "\n";
+      } else {
+        html += "<table>";
+        tableLines.forEach((line, i) => {
+          // Skip separator rows (---|---)
+          if (/^\s*\|?\s*[-:]+(\s*\|\s*[-:]+)+\s*\|?\s*$/.test(line)) return;
+          const cells = line.replace(/^\||\|$/g, "").split("|");
+          const tag = i === 0 ? "th" : "td";
+          html += "<tr>" + cells.map((c) => `<${tag}>${escapeHtml(c.trim())}</${tag}>`).join("") + "</tr>";
+        });
+        html += "</table>";
+      }
+      tableLines = [];
+      inTable = false;
+    }
+
+    lines.forEach((line) => {
+      if (line.includes("|")) {
+        inTable = true;
+        tableLines.push(line);
+      } else {
+        if (inTable) flushTable();
+        // Bold
+        line = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+        html += escapeHtmlPreserveMarkdown(line) + "\n";
+      }
+    });
+
+    if (inTable) flushTable();
+    return html;
+  }
+
+  function escapeHtml(str) {
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function escapeHtmlPreserveMarkdown(str) {
+    // Escape HTML except for our manually inserted <strong> tags
+    return str
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+      // Undo escaping we just applied to the tags
+      .replace(/&lt;strong&gt;/g, "<strong>")
+      .replace(/&lt;\/strong&gt;/g, "</strong>");
+  }
+
+  // ── Query ─────────────────────────────────────────────────────────────────
+  async function submitQuery() {
+    if (isLoading) return;
+
+    const query = document.getElementById("queryInput").value.trim();
+    if (!query) return;
+
+    const strings = STRINGS[currentLang];
+    setLoading(true);
+
+    // Show loading skeleton
+    const card = document.getElementById("responseCard");
+    const body = document.getElementById("responseBody");
+    card.style.display = "block";
+    body.className = "response-body";
+    body.innerHTML =
+      '<div class="skeleton-line" style="width:80%"></div>' +
+      '<div class="skeleton-line" style="width:60%"></div>' +
+      '<div class="skeleton-line" style="width:70%"></div>';
+
+    try {
+      const res = await fetch(WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query, language: currentLang }),
+      });
+
+      if (!res.ok) throw new Error("server");
+
+      const data = await res.json();
+      const answer = data.answer ?? data.output ?? JSON.stringify(data);
+      body.innerHTML = renderMarkdown(answer);
+    } catch (err) {
+      body.className = "response-body error";
+      body.textContent =
+        err.message === "server" ? strings.errorServer : strings.errorNetwork;
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function setLoading(loading) {
+    isLoading = loading;
+    document.getElementById("submitBtn").disabled = loading;
+    document.getElementById("spinner").style.display = loading ? "block" : "none";
+  }
+
+  // Submit on Ctrl+Enter / Cmd+Enter
+  document.getElementById("queryInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      submitQuery();
+    }
+  });
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+  setLang("en");
+</script>
+</body>
+</html>
