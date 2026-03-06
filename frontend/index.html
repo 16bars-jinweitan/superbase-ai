@@ -221,33 +221,67 @@
     }
 
     .response-body {
-      padding: 20px 24px;
-      font-size: 0.92rem;
-      line-height: 1.75;
-      white-space: pre-wrap;
+      padding: 16px 20px;
       word-break: break-word;
     }
 
-    /* Markdown-ish table rendering */
-    .response-body table {
-      border-collapse: collapse;
-      width: 100%;
-      margin: 12px 0;
-      font-size: 0.88rem;
+    .response-body.error {
+      padding: 20px 24px;
+      font-size: 0.92rem;
+      line-height: 1.75;
+      color: #CC0000;
     }
 
-    .response-body th, .response-body td {
+    /* ── AI response cards ── */
+    .ai-card {
       border: 1px solid var(--border);
-      padding: 7px 12px;
+      border-radius: var(--radius);
+      margin-bottom: 12px;
+      overflow: hidden;
+    }
+
+    .ai-card:last-child { margin-bottom: 0; }
+
+    .ai-card-label {
+      padding: 8px 16px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: #fff;
+    }
+
+    .data-card .ai-card-label        { background: #2563EB; }
+    .insight-card .ai-card-label     { background: #D97706; }
+    .rec-card .ai-card-label         { background: #059669; }
+
+    .ai-card-content {
+      padding: 14px 16px;
+      font-size: 0.91rem;
+      line-height: 1.7;
+    }
+
+    /* Table rendering inside cards */
+    .ai-card-content table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 8px 0;
+      font-size: 0.87rem;
+    }
+
+    .ai-card-content th, .ai-card-content td {
+      border: 1px solid var(--border);
+      padding: 6px 11px;
       text-align: left;
     }
 
-    .response-body th {
+    .ai-card-content th {
       background: #F0F0F0;
       font-weight: 700;
     }
 
-    .response-body.error { color: #CC0000; }
+    .ai-card-content ul { padding-left: 20px; margin: 6px 0; }
+    .ai-card-content li { margin-bottom: 4px; }
 
     /* Loading skeleton */
     .skeleton-line {
@@ -418,64 +452,6 @@
     });
   }
 
-  // ── Markdown table renderer ───────────────────────────────────────────────
-  function renderMarkdown(text) {
-    // Detect and convert markdown tables
-    const lines = text.split("\n");
-    let html = "";
-    let inTable = false;
-    let tableLines = [];
-
-    function flushTable() {
-      if (tableLines.length < 2) {
-        html += tableLines.join("\n") + "\n";
-      } else {
-        html += "<table>";
-        tableLines.forEach((line, i) => {
-          // Skip separator rows (---|---)
-          if (/^\s*\|?\s*[-:]+(\s*\|\s*[-:]+)+\s*\|?\s*$/.test(line)) return;
-          const cells = line.replace(/^\||\|$/g, "").split("|");
-          const tag = i === 0 ? "th" : "td";
-          html += "<tr>" + cells.map((c) => `<${tag}>${escapeHtml(c.trim())}</${tag}>`).join("") + "</tr>";
-        });
-        html += "</table>";
-      }
-      tableLines = [];
-      inTable = false;
-    }
-
-    lines.forEach((line) => {
-      if (line.includes("|")) {
-        inTable = true;
-        tableLines.push(line);
-      } else {
-        if (inTable) flushTable();
-        // Bold
-        line = line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-        html += escapeHtmlPreserveMarkdown(line) + "\n";
-      }
-    });
-
-    if (inTable) flushTable();
-    return html;
-  }
-
-  function escapeHtml(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-  }
-
-  function escapeHtmlPreserveMarkdown(str) {
-    // Escape HTML except for our manually inserted <strong> tags
-    return str
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      // Undo escaping we just applied to the tags
-      .replace(/&lt;strong&gt;/g, "<strong>")
-      .replace(/&lt;\/strong&gt;/g, "</strong>");
-  }
-
   // ── Query ─────────────────────────────────────────────────────────────────
   async function submitQuery() {
     if (isLoading) return;
@@ -507,7 +483,7 @@
 
       const data = await res.json();
       const answer = data.answer ?? data.output ?? JSON.stringify(data);
-      body.innerHTML = renderMarkdown(answer);
+      body.innerHTML = answer;
     } catch (err) {
       body.className = "response-body error";
       body.textContent =
@@ -534,5 +510,6 @@
   // ── Init ──────────────────────────────────────────────────────────────────
   setLang("en");
 </script>
+<elevenlabs-convai agent-id="agent_2201kk1gjbe7fahvzdsqbxemdfds"></elevenlabs-convai><script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
 </body>
 </html>

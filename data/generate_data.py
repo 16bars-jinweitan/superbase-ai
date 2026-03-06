@@ -152,10 +152,10 @@ def age_group(age: int) -> str:
 
 def generate_users(n=500):
     rows = []
-    join_start = TODAY - timedelta(days=365)
+    join_start = TODAY - timedelta(days=730)
     for _ in range(n):
         days_ago = int(abs(random.gauss(90, 100)))
-        join_date = TODAY - timedelta(days=min(days_ago, 365))
+        join_date = TODAY - timedelta(days=min(days_ago, 730))
         join_date = max(join_date, join_start)
         age = clamp(int(random.gauss(32, 10)), 18, 65)
         rows.append({
@@ -215,12 +215,12 @@ def seasonal_sku_weights(d: date):
     return [max(0.1, BASE_SKU_WEIGHTS[i] * mults[i]) for i in range(len(SKUS))]
 
 
-def generate_sales(users, machine_rows, recovery_machines, n=5000):
+def generate_sales(users, machine_rows, recovery_machines, n=20000):
     user_ids = [u["user_id"] for u in users]
     machine_location_map = {m["machine_id"]: m["location"] for m in machine_rows}
 
     rows = []
-    sale_start = TODAY - timedelta(days=180)
+    sale_start = TODAY - timedelta(days=730)
 
     for _ in range(n):
         purchase_date = random_date(sale_start, TODAY)
@@ -246,7 +246,7 @@ def generate_sales(users, machine_rows, recovery_machines, n=5000):
 def generate_interactions(users, n=3000):
     user_ids = [u["user_id"] for u in users]
     rows = []
-    event_start = TODAY - timedelta(days=180)
+    event_start = TODAY - timedelta(days=730)
 
     for _ in range(n):
         event_type = weighted_choice(EVENT_TYPES, EVENT_WEIGHTS)
@@ -357,7 +357,11 @@ def generate_campaign_segment_performance(users, interactions):
         counts[key]["users"].add(ev["user_id"])
 
     # For sparse cells, synthesise plausible numbers using affinity weights
-    quarters = ["2025-Q3", "2025-Q4", "2026-Q1"]
+    quarters = [
+        "2024-Q1", "2024-Q2", "2024-Q3", "2024-Q4",
+        "2025-Q1", "2025-Q2", "2025-Q3", "2025-Q4",
+        "2026-Q1",
+    ]
     rows = []
     for camp_id, camp_name in CAMPAIGNS:
         age_affinities = CAMPAIGN_AGE_AFFINITY[camp_id]
@@ -407,8 +411,6 @@ def generate_schema_sql():
     sql = """\
 -- Coke ON Analytics POC — PostgreSQL schema for Supabase
 -- Run this in the Supabase SQL Editor before importing CSVs.
-
-TRUNCATE TABLE campaign_segment_performance, user_metrics, app_interactions, sales, machines, users RESTART IDENTITY CASCADE;
 
 CREATE TABLE IF NOT EXISTS users (
     user_id       TEXT PRIMARY KEY,
@@ -467,6 +469,8 @@ CREATE TABLE IF NOT EXISTS campaign_segment_performance (
     engagement_rate  NUMERIC NOT NULL,
     PRIMARY KEY (campaign_id, age_group, gender, quarter)
 );
+
+TRUNCATE TABLE campaign_segment_performance, user_metrics, app_interactions, sales, machines, users RESTART IDENTITY CASCADE;
 """
     with open("schema.sql", "w", encoding="utf-8") as f:
         f.write(sql)
@@ -486,7 +490,7 @@ if __name__ == "__main__":
         ["machine_id", "location", "area_type", "footfall_tier", "footfall_index"],
     )
 
-    sales = generate_sales(users, machine_rows, recovery_machines, 5000)
+    sales = generate_sales(users, machine_rows, recovery_machines, 20000)
     write_csv(
         "sales.csv",
         sales,
