@@ -1,2 +1,5 @@
 # macOS metadata
 .DS_Store
+
+# Generated data files
+*.csv
