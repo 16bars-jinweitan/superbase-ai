@@ -133,6 +133,27 @@ main {
   margin-bottom: 18px;
 }
 
+.suggestion-group-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  margin: 10px 0 6px;
+  width: 100%;
+}
+
+.suggestion-group-label:first-child {
+  margin-top: 0;
+}
+
+.suggestion-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+
 .suggestion-chip {
   border: 1px solid var(--border);
   border-radius: 20px;
