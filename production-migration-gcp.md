@@ -2,176 +2,198 @@
 
 ## Context
 
-The current POC runs on: Supabase (cloud PostgreSQL) + n8n (hosted) + a static HTML frontend. Moving to GCP with Cloud SQL (MySQL 8.0 / InnoDB) is the most significant change — it triggers a cascade of updates across the schema, the n8n AI Agent's SQL dialect, the database connector, infrastructure, and compliance posture. This document covers every layer.
+The current POC runs on: Supabase (cloud PostgreSQL) + n8n (hosted) + a static HTML frontend with synthetic data.
+
+Moving to production on GCP means connecting to a **pre-existing Cloud SQL (MySQL) database** that already contains real Coke ON transaction data and user PII. We do not know the production schema. Our synthetic schema (`data/schema.sql`), sample CSVs, and data generator (`data/generate_data.py`) are **not relevant** to this migration and will be deleted.
+
+The work is therefore: discover the real schema, adapt the prototype to that schema, and harden the infrastructure for production.
 
 ---
 
-## 1. Database: PostgreSQL → MySQL/InnoDB on Cloud SQL
+## Phase 0: Schema Discovery (do this first — nothing else can proceed without it)
 
-### 1a. Cloud SQL Instance Setup
-- Engine: **MySQL 8.0** (InnoDB default, full window function support, utf8mb4 charset)
-- Region: `asia-northeast1` (Tokyo) — required for data residency with Japanese user PII
-- Tier: `db-n1-standard-2` or `db-g1-small` for early production; scale via Cloud SQL's vertical autoscaling
-- Enable **Private IP** only (no public IP); connect via Cloud SQL Auth Proxy or VPC peering
-- Enable **automated backups** (daily, 7-day retention minimum) and PITR
+Before changing any code or n8n configuration, obtain and document the production database schema.
 
-### 1b. Schema Translation (PostgreSQL → MySQL)
+### 0a. Get Read-Only Access
 
-Key differences to address in `data/schema.sql`:
+Request a read-only MySQL credential from the DBA team:
+- `SELECT` privilege only on the relevant database(s)
+- No `INSERT`, `UPDATE`, `DELETE`, `DROP`, or `ALTER` rights
+- Connect via **Cloud SQL Auth Proxy** or a VPN-controlled bastion — never via public IP
 
-| PostgreSQL | MySQL equivalent | Notes |
-|---|---|---|
-| `TEXT PRIMARY KEY` | `VARCHAR(20) PRIMARY KEY` | Size text PKs explicitly |
-| `NUMERIC` | `DECIMAL(10,4)` | Explicit precision |
-| `DATE` | `DATE` | Same |
-| `INTEGER` | `INT` | Same |
-| `ILIKE` in queries | `LIKE` (or `REGEXP`) | Case-insensitive by default in MySQL utf8mb4 |
-| `\|\|` string concat | `CONCAT()` | Different operator |
-| `CURRENT_DATE` | `CURDATE()` | MySQL equivalent |
-| No FK constraints | Explicit `FOREIGN KEY` + `REFERENCES` | InnoDB enforces these |
+### 0b. Introspect the Schema
 
-Add `CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci` to all tables for full Japanese text support.
-
-### 1c. Indexes to Add (missing in current schema)
+Run these queries against the production database:
 
 ```sql
--- sales: core analytical join & filter paths
-CREATE INDEX idx_sales_user_id       ON sales(user_id);
-CREATE INDEX idx_sales_purchase_date ON sales(purchase_date);
-CREATE INDEX idx_sales_machine_id    ON sales(machine_id);
-CREATE INDEX idx_sales_sku           ON sales(sku);
+-- List all tables
+SHOW TABLES;
 
--- app_interactions
-CREATE INDEX idx_ai_user_id          ON app_interactions(user_id);
-CREATE INDEX idx_ai_event_date       ON app_interactions(event_date);
-CREATE INDEX idx_ai_event_type       ON app_interactions(event_type);
+-- Full column inventory
+SELECT
+  TABLE_NAME,
+  COLUMN_NAME,
+  DATA_TYPE,
+  CHARACTER_MAXIMUM_LENGTH,
+  IS_NULLABLE,
+  COLUMN_KEY
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = '<production_db_name>'
+ORDER BY TABLE_NAME, ORDINAL_POSITION;
 
--- user_metrics: churn queries
-CREATE INDEX idx_um_churn_tier       ON user_metrics(churn_risk_tier);
-CREATE INDEX idx_um_churn_score      ON user_metrics(churn_risk_score);
+-- Approximate row counts (fast, uses statistics)
+SELECT TABLE_NAME, TABLE_ROWS
+FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = '<production_db_name>'
+ORDER BY TABLE_ROWS DESC;
+
+-- Foreign key relationships
+SELECT
+  TABLE_NAME, COLUMN_NAME,
+  REFERENCED_TABLE_NAME, REFERENCED_COLUMN_NAME
+FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
+WHERE TABLE_SCHEMA = '<production_db_name>'
+  AND REFERENCED_TABLE_NAME IS NOT NULL;
 ```
 
-### 1d. Foreign Key Constraints to Add
-Currently absent from the schema — add to enforce referential integrity:
-```sql
-ALTER TABLE sales            ADD CONSTRAINT fk_sales_user     FOREIGN KEY (user_id)    REFERENCES users(user_id);
-ALTER TABLE sales            ADD CONSTRAINT fk_sales_machine  FOREIGN KEY (machine_id) REFERENCES machines(machine_id);
-ALTER TABLE app_interactions ADD CONSTRAINT fk_ai_user        FOREIGN KEY (user_id)    REFERENCES users(user_id);
-ALTER TABLE user_metrics     ADD CONSTRAINT fk_um_user        FOREIGN KEY (user_id)    REFERENCES users(user_id);
-```
+### 0c. Map to Analytics Concepts
 
-### 1e. Data Migration
-- Export Supabase tables as CSV (current process already produces these)
-- Import via `LOAD DATA INFILE` or Cloud SQL import from Cloud Storage bucket
-- Validate row counts and spot-check seasonal patterns post-import
+Identify which production tables correspond to the concepts the POC is built around:
 
----
-
-## 2. n8n: Replace Supabase MCP with Cloud SQL Connector
-
-The **Supabase MCP Client** node (`mcp.supabase.com`) must be replaced — it is Supabase-specific. Two options:
-
-### Option A (Recommended): n8n MySQL Tool Node
-- Use n8n's native `MySQL` node configured as an **AI tool** attached to the Agent
-- Credential: Cloud SQL Auth Proxy (localhost:3306) or Cloud SQL connector via VPC
-- Store connection string in **n8n credential manager** (not in workflow JSON)
-- The agent uses `execute_query` action instead of Supabase's `execute_sql`
-
-### Option B: Custom HTTP Tool → Cloud SQL REST API
-- Use n8n HTTP Request node as a tool, calling a lightweight Cloud Run wrapper that executes parameterized SQL
-- More boilerplate but allows fine-grained query auditing and logging
-- Recommended if query-level access logging is a compliance requirement
-
-### n8n Deployment Change
-- Current n8n is at `n8n.volcanobase.co` (unknown hosting)
-- For GCP production: deploy n8n on **Cloud Run** (containerized) or **GKE**
-- Connect to Cloud SQL via **Cloud SQL Auth Proxy** sidecar
-- Store all secrets (OpenAI key, DB password) in **Google Secret Manager**, injected as env vars
-
----
-
-## 3. AI Agent System Prompt: SQL Dialect Update
-
-The system prompt inside the AI Agent node contains PostgreSQL-flavoured SQL reasoning instructions. For MySQL these must change:
-
-| What to change | From | To |
+| Analytics concept | POC synthetic table | Production table name (TBD) |
 |---|---|---|
-| Case-insensitive LIKE | `ILIKE '%text%'` | `LIKE '%text%'` (utf8mb4 is CI by default) |
-| String concat | `col1 \|\| col2` | `CONCAT(col1, col2)` |
-| Today's date | `CURRENT_DATE` | `CURDATE()` |
-| Date diff | `purchase_date - INTERVAL '30 days'` | `DATE_SUB(CURDATE(), INTERVAL 30 DAY)` |
-| Extract month | `EXTRACT(MONTH FROM date)` | `MONTH(date)` |
-| Type cast | `value::NUMERIC` | `CAST(value AS DECIMAL)` |
-| Null-safe | `COALESCE` | `COALESCE` (same) |
-| Limit | `LIMIT n` | `LIMIT n` (same) |
+| Purchase / transaction records | `sales` | ? |
+| User / member records | `users` | ? |
+| Vending machine inventory | `machines` | ? |
+| App event / engagement logs | `app_interactions` | ? |
+| Pre-aggregated reports | `user_metrics`, `campaign_segment_performance` | ? (may not exist) |
 
-The tool reference in the prompt must also change from `execute_sql` (Supabase MCP) to `execute_query` (MySQL node) or whatever the new tool exposes.
+If a concept has no production equivalent, that feature must be **removed from the system prompt** — do not ask the LLM to query tables that don't exist.
+
+### 0d. Identify PII Fields
+
+Flag any column that contains personal information:
+- Name, email, phone number, address, date of birth
+- Any `user_id` that is linkable to an external identity (not just an opaque hash)
+- Device identifiers, IP addresses
+
+PII fields must be **excluded from the AI agent's system prompt** — the agent should not be able to select them.
+
+### 0e. Output
+
+Produce a `docs/production-schema.md` that captures table names, column names, data types, row counts, and the analytics concept mapping. **Do not commit this file to the repository if it contains sensitive column names — store it separately or redact before committing.**
 
 ---
 
-## 4. GCP Infrastructure
+## Phase 1: Adapt the n8n AI Agent System Prompt
+
+The AI Agent's `systemMessage` (inside `n8n/workflow.json`) currently describes the 6 synthetic tables in detail. This must be completely replaced with the real schema.
+
+### What to change
+
+1. **Replace the Database Schema section** with the real table and column names from Phase 0. Include natural-language descriptions of each column — the LLM needs context, not just names.
+
+2. **Remove concepts with no production equivalent.** If there is no footfall metric, no `footfall_index` column, no campaign engagement table — remove those query patterns entirely. The LLM will hallucinate if the system prompt references tables or columns that don't exist.
+
+3. **Update the SQL dialect** from PostgreSQL to MySQL:
+
+   | What to change | PostgreSQL (current) | MySQL (production) |
+   |---|---|---|
+   | Case-insensitive LIKE | `ILIKE '%text%'` | `LIKE '%text%'` (utf8mb4_unicode_ci is CI by default) |
+   | String concat | `col1 \|\| col2` | `CONCAT(col1, col2)` |
+   | Today's date | `CURRENT_DATE` | `CURDATE()` |
+   | Date arithmetic | `date - INTERVAL '30 days'` | `DATE_SUB(date, INTERVAL 30 DAY)` |
+   | Extract month | `EXTRACT(MONTH FROM date)` | `MONTH(date)` |
+   | Format date | `TO_CHAR(date, 'YYYY-MM')` | `DATE_FORMAT(date, '%Y-%m')` |
+   | Type cast | `value::NUMERIC` | `CAST(value AS DECIMAL)` |
+
+4. **Replace tool reference:** change `execute_sql` (Supabase MCP) to `execute_query` (MySQL node), or whatever name the replacement tool exposes.
+
+5. **Remove the ×10 sales scaling instruction.** The "multiply sales counts by 10" instruction in the current system prompt is an artefact of the synthetic dataset being a 10% sample. Real data needs no scaling.
+
+6. **Update example SQL patterns** to use real table/column names and MySQL syntax.
+
+---
+
+## Phase 2: Replace the n8n Database Connector
+
+The **Supabase MCP Client** node (`mcp.supabase.com`) is Supabase-specific and must be replaced.
+
+### Recommended: n8n MySQL Tool Node
+
+1. In n8n, add a **MySQL node** configured as an **AI tool** attached to the Agent
+2. Configure the credential to point at Cloud SQL via Auth Proxy (`localhost:3306` on the n8n host) or via VPC private IP
+3. Store the DB password in the **n8n credential manager** — never in the workflow JSON
+4. Attach the MySQL node as a tool on the AI Agent (replacing the Supabase MCP node)
+5. Confirm the tool name the agent sees matches what the system prompt references
+6. Test with `SHOW TABLES` before running any agent queries
+
+### Alternative: Cloud Run wrapper
+
+If query-level audit logging is a compliance requirement, wrap Cloud SQL behind a lightweight Cloud Run service that logs every query before executing it. Use n8n's HTTP Request node as the tool instead.
+
+### n8n Hosting
+
+For production, move n8n off `n8n.volcanobase.co` to:
+- **Cloud Run** (containerised n8n, stateless, scales to zero) — recommended
+- Connect to Cloud SQL via Cloud SQL Auth Proxy sidecar
+- Store all secrets (OpenAI key, DB password) in **Google Secret Manager**, injected as env vars at runtime
+
+---
+
+## Phase 3: PII & Access Control
+
+Do this before any query runs against real user data.
+
+- **Read-only DB user:** `GRANT SELECT ON <db>.* TO 'analytics_agent'@'%'` — no write or DDL access, ever
+- **Exclude PII columns from the system prompt:** if a table has `email`, `full_name`, or `phone_number`, do not list those columns in the agent's schema description — it cannot SELECT what it doesn't know exists
+- **Pseudonymous user IDs:** if `user_id` is linkable to a real identity (not an opaque hash), treat it as PII — consider whether the agent should ever return raw user IDs in responses
+- **Query audit logging:** log all SQL executed by the agent (query text + timestamp + session ID) to Cloud Logging. This is required for APPI compliance
+- **LLM data handling:** OpenAI receives query results as context. Review OpenAI's data retention policy. If retaining data within GCP is required, switch to Vertex AI (Gemini) — this keeps all data under Google's BAA and within the `asia-northeast1` region
+
+---
+
+## Phase 4: GCP Infrastructure
 
 | Component | Service | Notes |
 |---|---|---|
-| Database | Cloud SQL (MySQL 8.0) | Private IP, asia-northeast1 |
+| Database | Cloud SQL (MySQL 8.0, pre-existing) | Private IP only, asia-northeast1 |
 | DB Proxy | Cloud SQL Auth Proxy | Sidecar on Cloud Run or VM |
 | Frontend hosting | Firebase Hosting or Cloud Storage + Cloud CDN | Static assets, global CDN |
 | n8n orchestration | Cloud Run (containerised n8n) | Stateless, auto-scales to zero |
 | Secrets | Secret Manager | All API keys, DB credentials |
 | Networking | VPC + Private Service Connect | DB not exposed to internet |
 | WAF / Rate limiting | Cloud Armor | Webhook endpoint protection |
-| LLM API | OpenAI (unchanged) or Vertex AI (Gemini) | Vertex avoids external egress |
+| LLM API | OpenAI (unchanged) or Vertex AI (Gemini) | Vertex avoids external egress, preferred for PII |
 | Monitoring | Cloud Logging + Cloud Monitoring | Dashboards for latency, errors, LLM cost |
 
 ---
 
-## 5. Authentication & Security Hardening
+## Phase 5: Authentication & Security Hardening
 
-Currently the webhook is **completely open** (no auth, CORS `*`). For production:
+The webhook is currently open (no auth, CORS `*`). For production:
 
-- **Webhook auth:** Add API key header check in n8n (or Cloud Armor header rule) — reject requests missing `X-API-Key`
-- **CORS:** Restrict to the production frontend origin (e.g. `https://coke-on.example.com`)
+- **Webhook auth:** Add API key header check in n8n — reject requests missing `X-API-Key`
+- **CORS:** Restrict to the production frontend origin only
 - **Rate limiting:** Cloud Armor rule — e.g. 60 requests/minute per IP
-- **Read-only DB user:** Create a MySQL user with only `SELECT` privilege — removes any risk of LLM-prompted writes even if the system prompt is bypassed
-- **SQL injection:** n8n MySQL node uses parameterized queries; the agent constructs queries from intent rather than interpolating raw user strings — this design is acceptable, but should be documented as a constraint
-- **Frontend config:** Move `CONFIG.WEBHOOK_URL` to a build-time env var or CI secret; never hardcode production URLs in source
+- **SQL injection:** n8n MySQL node uses parameterised queries; the agent constructs SQL from user intent rather than interpolating raw strings — document this constraint explicitly
 
 ---
 
-## 6. Data Pipeline: Table Refresh
+## Phase 6: Frontend Updates
 
-`user_metrics` and `campaign_segment_performance` are currently generated as static CSVs. In production with live data:
+### Suggested questions
+`frontend/index.html` lines 384–423 contain hardcoded suggested questions referencing our synthetic data concepts (Georgia Coffee, footfall, churn tiers, campaign IDs). After schema discovery, update these to reference:
+- Real product/SKU names from the production DB
+- Real analytics capabilities based on what tables and columns actually exist
+- Remove any concept that has no production equivalent
 
-- **Option A (Simplest):** Scheduled n8n workflow (nightly CRON) that rebuilds the two pre-computed tables via SQL `INSERT … SELECT` against the raw tables
-- **Option B:** Replace both tables with **MySQL views** — eliminates staleness entirely, slight query-time cost (acceptable at current data scale)
-- **Option C (Future):** Cloud Composer (Airflow) DAG for complex ETL as data grows
-
-Recommended for production launch: **Option A** — nightly rebuild via n8n CRON. Migrate to views if query latency becomes an issue.
-
----
-
-## 7. Frontend Hosting
-
-- Move from file-based to **Firebase Hosting** (simplest for static SPA) or Cloud Storage bucket + Cloud CDN
-- `frontend/assets/js/config.js` → replace `WEBHOOK_URL` hardcode with a value injected at deploy time (CI variable or separate `config.prod.js`)
-- Enable HTTPS (Firebase Hosting provides SSL automatically)
-- Add `Content-Security-Policy` header to restrict script sources
+### Webhook URL
+`frontend/assets/js/config.js` hardcodes the webhook URL. Replace with an environment-injected value at deploy time (CI variable or separate `config.prod.js`). Enable HTTPS (Firebase Hosting provides SSL automatically). Add `Content-Security-Policy` headers.
 
 ---
 
-## 8. Compliance & Data Governance
-
-When real Coke ON user data replaces synthetic data:
-
-- **APPI compliance** (Japan's Personal Information Protection Act): user_id, age, gender, region are personal data — requires data processing agreements, retention limits, and right-to-erasure implementation
-- **Data residency:** All data must remain in `asia-northeast1`; confirm Cloud SQL, Cloud Run, and Cloud CDN edge caching comply
-- **Anonymisation:** Consider hashing `user_id` and bucketing `age` into groups before storing if raw PII is not needed for analytics
-- **Audit logging:** Enable Cloud SQL audit logging; log all `execute_query` calls from the AI agent (query text, timestamp, user session)
-- **LLM data handling:** Review OpenAI's data retention policy for API inputs; consider Vertex AI (Gemini) to keep data within GCP and under Google's BAA
-
----
-
-## 9. Monitoring & Observability
+## Phase 7: Monitoring & Observability
 
 | Signal | Tool | Alert Threshold |
 |---|---|---|
@@ -183,15 +205,46 @@ When real Coke ON user data replaces synthetic data:
 
 ---
 
-## 10. Summary of Files Requiring Changes
+## APPI Compliance (Japan)
 
-| File | Change Required |
+When real Coke ON user data is involved:
+
+- **Data residency:** All data must remain in `asia-northeast1` — confirm Cloud SQL, Cloud Run, and CDN edge caching comply
+- **Retention limits:** Define and enforce retention periods for raw transaction data and logs
+- **Right to erasure:** Implement a process to delete a user's records on request
+- **Anonymisation:** Consider whether analytics can be served from aggregated data only, avoiding raw user records entirely
+- **Processing agreements:** Confirm DPA coverage between Coca-Cola, the n8n operator, and OpenAI (or Vertex AI)
+
+---
+
+## Files Requiring Changes
+
+| File | Change |
 |---|---|
-| `data/schema.sql` | Full rewrite: MySQL DDL, utf8mb4 charset, FK constraints, indexes |
-| `data/generate_data.py` | Minor: update schema.sql output to MySQL syntax |
+| AI Agent `systemMessage` in `n8n/workflow.json` | Full rewrite: real table/column names, MySQL dialect, remove scaling factor, remove non-existent concepts |
 | `n8n/workflow.json` | Replace Supabase MCP node with MySQL Tool node; update credential references |
-| AI Agent `systemMessage` | SQL dialect changes (see Section 3); update tool name |
-| `frontend/assets/js/config.js` | Replace hardcoded URL with environment-injected value |
-| `SETUP.md` | Full rewrite: GCP setup steps instead of Supabase/n8n.volcanobase instructions |
-| New: `infra/` directory | Terraform or gcloud CLI scripts for Cloud SQL, Cloud Run, Firebase, Secret Manager |
-| New: `sql/refresh_computed_tables.sql` | Nightly rebuild queries for `user_metrics` and `campaign_segment_performance` |
+| `frontend/index.html` | Update suggested questions to match real schema concepts and real product names |
+| `frontend/assets/js/config.js` | Replace hardcoded webhook URL with environment-injected value |
+| `SETUP.md` | Full rewrite: GCP setup steps |
+| New: `docs/production-schema.md` | Schema discovery output — mapping of real tables to analytics concepts (store separately if sensitive) |
+| New: `infra/` | Terraform or gcloud CLI scripts for Cloud SQL connection, Cloud Run n8n, Firebase, Secret Manager |
+
+## Files to Delete (not rewrite)
+
+| File | Reason |
+|---|---|
+| `data/schema.sql` | Describes our synthetic schema — irrelevant to production DB |
+| `data/generate_data.py` | Generates synthetic data — irrelevant; production data already exists |
+| `data/*.csv` | Synthetic data files |
+
+---
+
+## Key Risks
+
+| Risk | Mitigation |
+|---|---|
+| Production schema is far more complex than our 6-table design | Start with 3–4 core tables; expand system prompt incrementally; test each capability before adding the next |
+| PII exposure through ad-hoc LLM-generated SQL | Read-only DB user + exclude PII columns from system prompt + audit logging |
+| Analytics concepts from POC have no production equivalent | Schema discovery (Phase 0) gates everything else — remove unsupported features cleanly |
+| Real data volumes cause slow or expensive queries | Add query guardrails to system prompt: always use LIMIT, avoid full-table scans, require WHERE clauses on date columns |
+| LLM hallucinates column/table names | System prompt must be precise; test with adversarial queries that reference non-existent columns |
