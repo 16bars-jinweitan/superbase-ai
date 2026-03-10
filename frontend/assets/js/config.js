@@ -3,4 +3,5 @@
 
 const CONFIG = {
   WEBHOOK_URL: "https://n8n.volcanobase.co/webhook/coke-on-query",
+  PASSWORD: "prototype",
 };

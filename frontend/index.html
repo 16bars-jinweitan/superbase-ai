@@ -265,5 +265,56 @@
   setLang("en");
 </script>
 <elevenlabs-convai agent-id="agent_2201kk1gjbe7fahvzdsqbxemdfds"></elevenlabs-convai><script src="https://unpkg.com/@elevenlabs/convai-widget-embed" async type="text/javascript"></script>
+
+<!-- ── Auth overlay ───────────────────────────────────────────────────────── -->
+<div id="auth-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.93);z-index:9999;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;padding:2rem 2.5rem;width:320px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3);">
+    <div style="margin-bottom:1.25rem;">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:40px;height:40px;margin:0 auto 0.5rem;display:block;">
+        <circle cx="16" cy="16" r="15" fill="#E4002B" fill-opacity="0.9"/>
+        <text x="16" y="21" text-anchor="middle" font-size="14" font-weight="bold" fill="white" font-family="sans-serif">ON</text>
+      </svg>
+      <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#1a1a1a;">Coke ON Analytics</h2>
+    </div>
+    <input
+      type="password"
+      id="auth-input"
+      placeholder="Password"
+      style="width:100%;box-sizing:border-box;padding:0.6rem 0.75rem;border:1px solid #ccc;border-radius:6px;font-size:1rem;margin-bottom:0.75rem;outline:none;"
+    />
+    <button
+      id="auth-submit"
+      style="width:100%;padding:0.65rem;background:#E4002B;color:#fff;border:none;border-radius:6px;font-size:1rem;font-weight:600;cursor:pointer;"
+    >Enter</button>
+    <p id="auth-error" style="display:none;margin:0.6rem 0 0;color:#E4002B;font-size:0.85rem;">Incorrect password</p>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const SESSION_KEY = 'coke_on_auth';
+    const overlay = document.getElementById('auth-overlay');
+
+    if (sessionStorage.getItem(SESSION_KEY) === '1') return;
+
+    overlay.style.display = 'flex';
+
+    function attempt() {
+      if (document.getElementById('auth-input').value === CONFIG.PASSWORD) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        overlay.style.display = 'none';
+      } else {
+        document.getElementById('auth-error').style.display = 'block';
+        document.getElementById('auth-input').value = '';
+        document.getElementById('auth-input').focus();
+      }
+    }
+
+    document.getElementById('auth-submit').addEventListener('click', attempt);
+    document.getElementById('auth-input').addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') attempt();
+    });
+  })();
+</script>
 </body>
 </html>
