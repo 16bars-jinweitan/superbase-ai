@@ -98,37 +98,75 @@
   const SUGGESTIONS = {
     en: [
       {
-        label: "Analytic",
+        label: "Segment",
         items: [
-          "Do Weekly+ and Monthly+ users show narrower product loyalty (fewer SKUs) or broader exploration than other users?",
-          "Create a graph of the last 12 months of sales broken down by product.",
-          "How do drink preferences differ by age band and gender?",
-          "Which combination of behavioural signals best predicts a user's willingness to try a new product?",
+          "Show a day to day graph of % of new users making their first purchase.",
+          "Is there a \"magic number\" of purchases in the first 30 days that predicts long-term retention in Monthly+ or above?",
         ],
       },
       {
-        label: "Predictive",
+        label: "Drink Preference",
         items: [
-          "Which vending machines have the highest recovery potential based on footfall? What suggestions do you have for realising this potential?",
-          "Which user segments are showing early churn signals and what's the recommended intervention?",
+          "What are the top 5 products purchased by each primary segment? Do preferences diverge significantly across segments?",
+          "Do Weekly+ and Daily+ users show narrower product loyalty (fewer SKUs) or broader exploration than Monthly− users?",
+        ],
+      },
+      {
+        label: "Demographics",
+        items: [
+          "How do drink preferences differ by age band (18–24, 25–34, 35–44, 45+) and gender?",
+          "Are there clear generational preference shifts (e.g., Gen Z skewing toward non-carbonated)?",
+        ],
+      },
+      {
+        label: "Seasonal & Timing",
+        items: [
+          "Is there a weekday vs. weekend purchase gap? Which segments show the biggest drop-off on weekends?",
+          "Are there \"Monday spike\" or \"Friday drop-off\" patterns that could inform push notification timing?",
+        ],
+      },
+      {
+        label: "Cross Category",
+        items: [
+          "If we could only personalise one dimension per user, which behavioural category delivers the highest incremental NSR?",
+          "Which combination of behavioural signals best predicts a user's willingness to try a new product?",
         ],
       },
     ],
     ja: [
       {
-        label: "分析",
+        label: "セグメント",
         items: [
-          "Weekly+およびMonthly+ユーザーは他のユーザーと比べて、より少ないSKUに集中した商品選択をしますか、それとも幅広く探索しますか？",
-          "過去12ヶ月の売上を商品別に分けたグラフを作成してください。",
-          "年齢層と性別によって飲み物の好みはどのように異なりますか？",
-          "ユーザーが新商品を試す意欲を最もよく予測する行動シグナルの組み合わせはどれですか？",
+          "新規ユーザーが初回購入に至る割合の日次推移をグラフで表示してください。",
+          "最初の30日間の購入回数に、Monthly+以上の長期定着を予測する「マジックナンバー」はありますか？",
         ],
       },
       {
-        label: "予測・提案",
+        label: "飲料嗜好",
         items: [
-          "集客ポテンシャルを考慮した回復余地の高い自販機はどれですか？そのポテンシャルを実現するための提案もお願いします。",
-          "早期解約シグナルを示しているユーザーセグメントと推奨施策を教えてください",
+          "主要セグメントごとの購入数トップ5商品は何ですか？セグメント間で嗜好に大きな違いはありますか？",
+          "Weekly+やDaily+ユーザーはMonthly−ユーザーと比べて、少ないSKUに集中した購買をしますか、それとも幅広く探索しますか？",
+        ],
+      },
+      {
+        label: "デモグラフィック",
+        items: [
+          "年齢層（18〜24歳、25〜34歳、35〜44歳、45歳以上）と性別によって飲み物の好みはどう異なりますか？",
+          "Z世代が非炭酸飲料を好むなど、明確な世代間の嗜好変化はありますか？",
+        ],
+      },
+      {
+        label: "季節・時間帯",
+        items: [
+          "平日と週末の購買ギャップはありますか？週末に最も大きく落ち込むセグメントはどれですか？",
+          "月曜スパイクや金曜ドロップオフなど、プッシュ通知のタイミングに活かせるパターンはありますか？",
+        ],
+      },
+      {
+        label: "クロスカテゴリ",
+        items: [
+          "ユーザーごとに1つだけパーソナライズするなら、どの行動カテゴリが最も高い増分NSRをもたらしますか？",
+          "ユーザーが新商品を試す意欲を最もよく予測する行動シグナルの組み合わせはどれですか？",
         ],
       },
     ],

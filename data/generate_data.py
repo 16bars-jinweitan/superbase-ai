@@ -4,7 +4,7 @@ Generates six CSV files for Supabase import and schema.sql for table creation:
 
   Raw event tables:
   - users.csv                       (~500 rows)
-  - sales.csv                       (~5,000 rows, with seasonal SKU weighting)
+  - sales.csv                       (~20,000 rows, with seasonal SKU weighting)
   - app_interactions.csv            (~3,000 rows)
 
   Pre-computed / context tables (kept for query performance):
@@ -23,7 +23,7 @@ import csv
 import random
 import uuid
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, time
 
 random.seed(42)
 
@@ -42,6 +42,36 @@ GENDER_WEIGHTS = [45, 45, 10]
 
 SKUS = ["Georgia Coffee", "Coca-Cola", "Water", "Fanta", "Aquarius"]
 BASE_SKU_WEIGHTS = [40, 25, 20, 10, 5]
+
+# Unit prices in JPY (realistic vending machine prices)
+SKU_PRICES = {
+    "Georgia Coffee": 130,
+    "Coca-Cola": 160,
+    "Water": 110,
+    "Fanta": 160,
+    "Aquarius": 150,
+}
+
+# Day-of-week purchase multipliers (0=Monday … 6=Sunday, ISO weekday - 1)
+# Slight Monday spike, Friday dip, lower weekends
+DAY_OF_WEEK_MULTIPLIERS = {
+    0: 1.10,  # Monday — slight spike
+    1: 1.00,  # Tuesday
+    2: 1.00,  # Wednesday
+    3: 1.00,  # Thursday
+    4: 0.90,  # Friday — slight dip
+    5: 0.70,  # Saturday
+    6: 0.60,  # Sunday
+}
+
+# Hour-of-day weights for purchase timestamp generation
+# Indices 0–23 represent hours; weights reflect vending machine traffic patterns
+HOUR_WEIGHTS = [
+    1, 1, 0, 0, 0, 1,     # 00–05: late night / early morning (sparse)
+    3, 8, 10, 6, 5, 9,    # 06–11: morning commute + mid-morning
+    12, 10, 7, 7, 8, 9,   # 12–17: lunch peak + afternoon
+    8, 6, 4, 3, 2, 1,     # 18–23: evening commute → night
+]
 
 # Seasonal SKU multipliers by month (1=Jan … 12=Dec)
 # Positive seasons for each product:
@@ -158,12 +188,48 @@ def generate_users(n=500):
         join_date = TODAY - timedelta(days=min(days_ago, 730))
         join_date = max(join_date, join_start)
         age = clamp(int(random.gauss(32, 10)), 18, 65)
+
+        # Purchase frequency segment — controls how often this user buys
+        # Weights chosen so weighted sampling yields realistic avg_gap per segment:
+        #   Daily+  (≤2 days)  : ~15% of users, weight 8.0
+        #   Weekly+ (≤7 days)  : ~25% of users, weight 3.0
+        #   Monthly (≤30 days) : ~35% of users, weight 1.0
+        #   Monthly−(>30 days) : ~25% of users, weight 0.2
+        freq_roll = random.random()
+        if freq_roll < 0.15:
+            purchase_rate_weight = 8.0
+        elif freq_roll < 0.40:
+            purchase_rate_weight = 3.0
+        elif freq_roll < 0.75:
+            purchase_rate_weight = 1.0
+        else:
+            purchase_rate_weight = 0.2
+
+        # SKU loyalty profile — 35% of users strongly prefer one SKU (loyal),
+        # 65% explore freely (explorer). Stored as per-user multipliers applied
+        # on top of seasonal weights in generate_sales.
+        if random.random() < 0.35:
+            fav_idx = random.randint(0, len(SKUS) - 1)
+            sku_pref_weights = [0.5] * len(SKUS)
+            sku_pref_weights[fav_idx] = 3.0
+            sku_loyalty_type = "Loyal"
+            preferred_sku = SKUS[fav_idx]
+        else:
+            sku_pref_weights = [1.0] * len(SKUS)
+            sku_loyalty_type = "Explorer"
+            preferred_sku = ""
+
         rows.append({
-            "user_id": f"USR-{uid()[:8].upper()}",
+            "user_id": f"USR-{uid()[:12].upper()}",
             "join_date": join_date.isoformat(),
             "age": age,
             "gender": weighted_choice(GENDERS, GENDER_WEIGHTS),
             "region": weighted_choice(REGIONS, REGION_WEIGHTS),
+            "sku_loyalty_type": sku_loyalty_type,
+            "preferred_sku": preferred_sku,
+            # Internal fields — used in generate_sales, not written to CSV
+            "purchase_rate_weight": purchase_rate_weight,
+            "sku_pref_weights": sku_pref_weights,
         })
     return rows
 
@@ -215,28 +281,59 @@ def seasonal_sku_weights(d: date):
     return [max(0.1, BASE_SKU_WEIGHTS[i] * mults[i]) for i in range(len(SKUS))]
 
 
+def random_hour():
+    """Pick a realistic hour of day weighted by vending machine traffic."""
+    return weighted_choice(list(range(24)), HOUR_WEIGHTS)
+
+
 def generate_sales(users, machine_rows, recovery_machines, n=20000):
     user_ids = [u["user_id"] for u in users]
+    user_join_dates = {u["user_id"]: date.fromisoformat(u["join_date"]) for u in users}
+    user_rate_weights = [u["purchase_rate_weight"] for u in users]
+    user_sku_prefs = {u["user_id"]: u["sku_pref_weights"] for u in users}
     machine_location_map = {m["machine_id"]: m["location"] for m in machine_rows}
+    max_dow_mult = max(DAY_OF_WEEK_MULTIPLIERS.values())
 
     rows = []
-    sale_start = TODAY - timedelta(days=730)
 
     for _ in range(n):
-        purchase_date = random_date(sale_start, TODAY)
+        # Pick user weighted by their purchase_rate_weight, then pick a date
+        # from their join_date onward — guarantees purchase_date >= join_date
+        user_id = random.choices(user_ids, weights=user_rate_weights, k=1)[0]
+        user_start = user_join_dates[user_id]
+
+        # Pick a date with day-of-week acceptance/rejection sampling
+        while True:
+            purchase_date = random_date(user_start, TODAY)
+            dow = purchase_date.weekday()  # 0=Monday
+            if random.random() < DAY_OF_WEEK_MULTIPLIERS[dow] / max_dow_mult:
+                break
+
+        # Add realistic time of day
+        hour = random_hour()
+        minute = random.randint(0, 59)
+        second = random.randint(0, 59)
+        purchase_ts = datetime.combine(purchase_date, time(hour, minute, second))
 
         machine = random.choice(MACHINE_IDS)
         # Recovery machines get ~70% fewer sales to make the gap visible
         if machine in recovery_machines and random.random() < 0.7:
             machine = random.choice([m for m in MACHINE_IDS if m not in recovery_machines])
 
+        # Combine seasonal weights with per-user SKU preference multipliers
+        base_weights = seasonal_sku_weights(purchase_date)
+        pref = user_sku_prefs[user_id]
+        combined_weights = [b * p for b, p in zip(base_weights, pref)]
+        sku = weighted_choice(SKUS, combined_weights)
+
         rows.append({
-            "sale_id": f"SAL-{uid()[:8].upper()}",
-            "user_id": random.choice(user_ids),
-            "sku": weighted_choice(SKUS, seasonal_sku_weights(purchase_date)),
-            "purchase_date": purchase_date.isoformat(),
+            "sale_id": f"SAL-{uid()[:12].upper()}",
+            "user_id": user_id,
+            "sku": sku,
+            "purchase_date": purchase_ts.strftime("%Y-%m-%d %H:%M:%S"),
             "machine_id": machine,
             "machine_location": machine_location_map[machine],
+            "unit_price": SKU_PRICES[sku],
         })
     return rows
 
@@ -257,7 +354,7 @@ def generate_interactions(users, n=3000):
             campaign_id, campaign_name = camp
 
         rows.append({
-            "interaction_id": f"INT-{uid()[:8].upper()}",
+            "interaction_id": f"INT-{uid()[:12].upper()}",
             "user_id": random.choice(user_ids),
             "event_type": event_type,
             "campaign_id": campaign_id,
@@ -275,9 +372,12 @@ def generate_user_metrics(users, sales):
 
     # Index sales by user
     user_purchase_dates = defaultdict(list)
+    user_revenue = defaultdict(int)
     for s in sales:
-        d = date.fromisoformat(s["purchase_date"])
+        # purchase_date is now a timestamp string "YYYY-MM-DD HH:MM:SS"
+        d = date.fromisoformat(s["purchase_date"][:10])
         user_purchase_dates[s["user_id"]].append(d)
+        user_revenue[s["user_id"]] += s["unit_price"]
 
     rows = []
     for u in users:
@@ -317,6 +417,15 @@ def generate_user_metrics(users, sales):
         else:
             churn_tier = "Low"
 
+        if avg_gap <= 2:
+            freq_segment = "Daily+"
+        elif avg_gap <= 7:
+            freq_segment = "Weekly+"
+        elif avg_gap <= 30:
+            freq_segment = "Monthly"
+        else:
+            freq_segment = "Monthly-"
+
         rows.append({
             "user_id": uid_val,
             "last_purchase_date": last_purchase.isoformat() if last_purchase else "",
@@ -325,8 +434,10 @@ def generate_user_metrics(users, sales):
             "purchases_30d": p30,
             "purchases_90d": p90,
             "avg_days_between_purchases": avg_gap,
+            "total_revenue": user_revenue.get(uid_val, 0),
             "churn_risk_score": churn_score,
             "churn_risk_tier": churn_tier,
+            "frequency_segment": freq_segment,
         })
     return rows
 
@@ -399,7 +510,7 @@ def generate_campaign_segment_performance(users, interactions):
 
 def write_csv(filename, rows, fieldnames):
     with open(filename, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(rows)
     print(f"  Wrote {len(rows):,} rows → {filename}")
@@ -411,16 +522,21 @@ def generate_schema_sql():
     sql = """\
 -- Coke ON Analytics POC — PostgreSQL schema for Supabase
 -- Run this in the Supabase SQL Editor before importing CSVs.
+-- Drops and recreates all tables — safe for POC (synthetic data only).
 
-CREATE TABLE IF NOT EXISTS users (
-    user_id       TEXT PRIMARY KEY,
-    join_date     DATE NOT NULL,
-    age           INTEGER NOT NULL,
-    gender        TEXT NOT NULL,
-    region        TEXT NOT NULL
+DROP TABLE IF EXISTS campaign_segment_performance, user_metrics, app_interactions, sales, machines, users CASCADE;
+
+CREATE TABLE users (
+    user_id          TEXT PRIMARY KEY,
+    join_date        DATE NOT NULL,
+    age              INTEGER NOT NULL,
+    gender           TEXT NOT NULL,
+    region           TEXT NOT NULL,
+    sku_loyalty_type TEXT NOT NULL,
+    preferred_sku    TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS machines (
+CREATE TABLE machines (
     machine_id     TEXT PRIMARY KEY,
     location       TEXT NOT NULL,
     area_type      TEXT NOT NULL,
@@ -428,16 +544,17 @@ CREATE TABLE IF NOT EXISTS machines (
     footfall_index INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS sales (
+CREATE TABLE sales (
     sale_id          TEXT PRIMARY KEY,
     user_id          TEXT NOT NULL,
     sku              TEXT NOT NULL,
-    purchase_date    DATE NOT NULL,
+    purchase_date    TIMESTAMP NOT NULL,
     machine_id       TEXT NOT NULL,
-    machine_location TEXT NOT NULL
+    machine_location TEXT NOT NULL,
+    unit_price       INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS app_interactions (
+CREATE TABLE app_interactions (
     interaction_id TEXT PRIMARY KEY,
     user_id        TEXT NOT NULL,
     event_type     TEXT NOT NULL,
@@ -446,7 +563,7 @@ CREATE TABLE IF NOT EXISTS app_interactions (
     event_date     DATE NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS user_metrics (
+CREATE TABLE user_metrics (
     user_id                    TEXT PRIMARY KEY,
     last_purchase_date         DATE,
     days_since_last_purchase   INTEGER NOT NULL,
@@ -454,11 +571,13 @@ CREATE TABLE IF NOT EXISTS user_metrics (
     purchases_30d              INTEGER NOT NULL,
     purchases_90d              INTEGER NOT NULL,
     avg_days_between_purchases NUMERIC NOT NULL,
+    total_revenue              INTEGER NOT NULL,
     churn_risk_score           NUMERIC NOT NULL,
-    churn_risk_tier            TEXT NOT NULL
+    churn_risk_tier            TEXT NOT NULL,
+    frequency_segment          TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS campaign_segment_performance (
+CREATE TABLE campaign_segment_performance (
     campaign_id      TEXT NOT NULL,
     campaign_name    TEXT NOT NULL,
     age_group        TEXT NOT NULL,
@@ -469,8 +588,6 @@ CREATE TABLE IF NOT EXISTS campaign_segment_performance (
     engagement_rate  NUMERIC NOT NULL,
     PRIMARY KEY (campaign_id, age_group, gender, quarter)
 );
-
-TRUNCATE TABLE campaign_segment_performance, user_metrics, app_interactions, sales, machines, users RESTART IDENTITY CASCADE;
 """
     with open("schema.sql", "w", encoding="utf-8") as f:
         f.write(sql)
@@ -481,7 +598,7 @@ if __name__ == "__main__":
     print("Generating synthetic Coke ON data...")
 
     users = generate_users(500)
-    write_csv("users.csv", users, ["user_id", "join_date", "age", "gender", "region"])
+    write_csv("users.csv", users, ["user_id", "join_date", "age", "gender", "region", "sku_loyalty_type", "preferred_sku"])
 
     machine_rows, recovery_machines = generate_machines()
     write_csv(
@@ -494,7 +611,7 @@ if __name__ == "__main__":
     write_csv(
         "sales.csv",
         sales,
-        ["sale_id", "user_id", "sku", "purchase_date", "machine_id", "machine_location"],
+        ["sale_id", "user_id", "sku", "purchase_date", "machine_id", "machine_location", "unit_price"],
     )
 
     interactions = generate_interactions(users, 3000)
@@ -510,8 +627,8 @@ if __name__ == "__main__":
         user_metrics,
         [
             "user_id", "last_purchase_date", "days_since_last_purchase", "total_purchases",
-            "purchases_30d", "purchases_90d", "avg_days_between_purchases",
-            "churn_risk_score", "churn_risk_tier",
+            "purchases_30d", "purchases_90d", "avg_days_between_purchases", "total_revenue",
+            "churn_risk_score", "churn_risk_tier", "frequency_segment",
         ],
     )
 

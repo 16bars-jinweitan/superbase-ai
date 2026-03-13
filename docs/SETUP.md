@@ -6,7 +6,12 @@
 cd data && python3 generate_data.py
 ```
 
-This writes 6 CSV files and `data/schema.sql`.
+This writes 6 CSV files and `data/schema.sql`. Key data design choices:
+
+- **Sales**: timestamps (date + time of day), day-of-week weighting, `unit_price` per SKU
+- **Purchase frequency**: each user is assigned a `purchase_rate_weight` at generation time, producing a realistic spread across four segments — `Daily+` (≤2 day avg gap), `Weekly+` (≤7 days), `Monthly` (≤30 days), `Monthly-` (>30 days). The segment is pre-computed and stored in `user_metrics.frequency_segment`.
+- **SKU loyalty**: ~35% of users are "loyal" (one SKU gets 6× the probability of others); the remaining 65% explore freely. Preference multipliers are combined with seasonal weights, so a loyal Georgia Coffee drinker still buys slightly less of it in summer.
+- **Temporal integrity**: every sale is guaranteed to occur on or after the purchasing user's `join_date`.
 
 ## 2. Create tables in Supabase
 
@@ -85,3 +90,16 @@ python3 generate_data.py
 ```
 
 Outputs all 6 CSV files and `schema.sql`. Re-run the schema SQL and re-import the CSVs to Supabase if the data changes. The script also prints which machines are designated as recovery-opportunity machines (high footfall, low sales).
+
+## Volume scaling
+
+The database holds a compact sample (500 users, 20K sales, 3K interactions). The system prompt instructs the LLM to silently scale figures before presenting them so they appear realistic:
+
+| Metric | DB rows | Presented as | Multiplier |
+|---|---|---|---|
+| Sales counts / revenue | 20,000 | ~1,000,000 | ×50 |
+| User counts | 500 | ~100,000 | ×200 |
+| App interactions | 3,000 | ~600,000 | ×200 |
+| Campaign engagement / unique users | raw values | scaled | ×200 |
+
+Rates, percentages, per-user metrics, averages, and machine counts are **not** scaled. The scaling rules live in the `## Volume Scaling` section of the AI Agent system prompt in `n8n/workflow.json`.
