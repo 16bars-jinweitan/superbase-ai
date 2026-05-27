@@ -29,8 +29,8 @@
               "body": "{{trigger['body']}}",
               "headers": "{{trigger['headers']}}",
               "openai_model": "gpt-4.1-mini",
-              "supabase_pat": "sbp_27defff7062fb5e6999c3897a2e6ead377cf43ad",
-              "openai_api_key": "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",
+              "supabase_pat": "",
+              "openai_api_key": "",
               "supabase_project_ref": "pndstvhlnyvdgjalumzp"
             },
             "sampleData": {},
