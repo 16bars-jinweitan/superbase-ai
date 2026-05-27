@@ -249,14 +249,43 @@
     try {
       const res = await fetch(WEBHOOK_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json, text/plain, text/html",
+        },
         body: JSON.stringify({ query, language: currentLang }),
       });
 
       if (!res.ok) throw new Error("server");
 
-      const data = await res.json();
-      const answer = data.answer ?? data.output ?? JSON.stringify(data);
+      const raw = await res.text();
+
+      let data = null;
+      if (raw) {
+        try {
+          data = JSON.parse(raw);
+        } catch {
+          // Non-JSON webhook responses are valid in some Activepieces flows.
+          data = raw;
+        }
+      }
+
+      const answer =
+        (data && typeof data === "object" && data.answer) ||
+        (data && typeof data === "object" && data.output) ||
+        (data && typeof data === "object" && data.message) ||
+        (data && typeof data === "object" && data?.data?.answer) ||
+        (data && typeof data === "object" && data?.body?.answer) ||
+        (typeof data === "string" ? data : "");
+
+      if (!answer) {
+        body.className = "response-body error";
+        body.textContent =
+          "Webhook returned an empty payload. In Activepieces, add a final step to return JSON like {\"answer\":\"...\"}.";
+        return;
+      }
+
+      body.className = "response-body";
       body.innerHTML = answer;
     } catch (err) {
       body.className = "response-body error";

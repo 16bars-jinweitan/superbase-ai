@@ -1,0 +1,147 @@
+﻿{
+  "name": "Coke ON Analytics Agent",
+  "type": "SHARED",
+  "summary": "",
+  "description": "",
+  "tags": [],
+  "blogUrl": "",
+  "metadata": {
+    "externalId": "IYlrc1V39Lv8nM6bQDTN9"
+  },
+  "author": "Tan Jin Wei",
+  "categories": [],
+  "pieces": [
+    "@activepieces/piece-webhook"
+  ],
+  "flows": [
+    {
+      "displayName": "Coke ON Analytics Agent",
+      "trigger": {
+        "name": "trigger",
+        "valid": true,
+        "displayName": "Catch Webhook",
+        "nextAction": {
+          "name": "step_1",
+          "type": "CODE",
+          "valid": true,
+          "settings": {
+            "input": {
+              "body": "{{trigger['body']}}",
+              "headers": "{{trigger['headers']}}",
+              "openai_model": "gpt-4.1-mini",
+              "supabase_pat": "sbp_27defff7062fb5e6999c3897a2e6ead377cf43ad",
+              "openai_api_key": "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",
+              "supabase_project_ref": "pndstvhlnyvdgjalumzp"
+            },
+            "sampleData": {},
+            "sourceCode": {
+              "code": "export const code = async (inputs) => {\n  const body =\n  inputs.body ||\n  inputs.payload?.body ||\n  inputs.propsValue?.body ||\n  {};\n  const headers =\n  inputs.headers ||\n  inputs.payload?.headers ||\n  inputs.propsValue?.headers ||\n  {};\n  const rawQuery = body.query || body.message || body.text || '';\n  const isVoice = String(headers['user-agent'] || headers['User-Agent'] || '').includes('ElevenLabs');\n  const userQuery = isVoice ? `[VOICE] ${rawQuery}` : rawQuery;\n\n  if (!userQuery) {\n    return { answer: '<div class=\"ai-card data-card\"><div class=\"ai-card-label\">Data</div><div class=\"ai-card-content\">Missing query. Send JSON body like {&quot;query&quot;:&quot;...&quot;}</div></div><div class=\"ai-card insight-card\"><div class=\"ai-card-label\">Insight</div><div class=\"ai-card-content\">No analysis was run.</div></div><div class=\"ai-card rec-card\"><div class=\"ai-card-label\">Recommendations</div><div class=\"ai-card-content\">Send a query field in the webhook body.</div></div>' };\n  }\n\n  const today = new Date().toISOString().slice(0, 10);\n  const systemMessage = `=You are a bilingual analytics assistant for the Coke ON loyalty programme, capable of both descriptive analytics and data-driven predictions and recommendations.\n\nToday's date is ${today}. The dataset covers 2025-Q3, 2025-Q4, and 2026-Q1. When the user refers to a quarter without specifying a year (e.g. \"Q3\"), use the most recent matching quarter in the dataset.\n\n## Language Rule\nALWAYS respond in the same language as the user's query. If the query is in Japanese, respond entirely in Japanese. If in English, respond in English. Never switch languages mid-response.\n\n## Database Schema (PostgreSQL via Supabase)\n\nYou have access to six tables in the Coke ON Supabase database:\n\n**users** table\n- user_id (text) — unique identifier, e.g. USR-XXXXXXXX\n- join_date (date) — when the user registered\n- age (integer) — user age in years\n- gender (text) — Male / Female / Other\n- region (text) — Japanese prefecture, e.g. Tokyo, Osaka, Aichi\n- sku_loyalty_type (text) — Loyal (strong preference for one SKU) or Explorer (buys across all SKUs)\n- preferred_sku (text) — the user's preferred SKU if Loyal, empty string if Explorer\n\n**sales** table\n- sale_id (text) — unique identifier\n- user_id (text) — foreign key → users.user_id\n- sku (text) — product name: Georgia Coffee, Coca-Cola, Water, Fanta, Aquarius\n- purchase_date (timestamp) — includes date and time of purchase\n- machine_id (text) — vending machine ID, e.g. MACH-001\n- machine_location (text) — prefecture where the machine is located\n- unit_price (integer) — price in JPY (Georgia Coffee 130, Coca-Cola 160, Water 110, Fanta 160, Aquarius 150)\n\n**app_interactions** table\n- interaction_id (text) — unique identifier\n- user_id (text) — foreign key → users.user_id\n- event_type (text) — LoggedIn / EarnedStamp / EngagedCampaign\n- campaign_id (text) — populated when event_type = EngagedCampaign\n- campaign_name (text) — human-readable campaign name\n- event_date (date)\n\n**machines** table\n- machine_id (text) — unique identifier, e.g. MACH-001\n- location (text) — prefecture\n- area_type (text) — Transit Hub / Office District / Residential / Tourist / University / Retail\n- footfall_tier (text) — High / Medium / Low\n- footfall_index (integer) — relative pedestrian volume score, 1–100\n\n**user_metrics** table (pre-computed — one row per user)\n- user_id (text) — foreign key → users.user_id\n- last_purchase_date (date)\n- days_since_last_purchase (integer)\n- total_purchases (integer)\n- purchases_30d (integer) — purchases in the last 30 days\n- purchases_90d (integer) — purchases in the last 90 days\n- avg_days_between_purchases (numeric)\n- total_revenue (integer) — lifetime revenue in JPY (sum of unit_price across all purchases)\n- churn_risk_score (numeric) — 0–100, higher = greater churn risk\n- churn_risk_tier (text) — High (≥70) / Medium (40–69) / Low (<40)\n- frequency_segment (text) — pre-computed purchase cadence: Daily+ (avg gap ≤2 days) / Weekly+ (≤7 days) / Monthly (≤30 days) / Monthly- (>30 days)\n\n**campaign_segment_performance** table (pre-aggregated — one row per campaign × age group × gender × quarter)\n- campaign_id (text)\n- campaign_name (text)\n- age_group (text) — 18-24 / 25-34 / 35-44 / 45-54 / 55-65\n- gender (text) — Male / Female / Other\n- quarter (text) — format YYYY-QN, e.g. 2025-Q3\n- engagement_count (integer) — total campaign engagement events\n- unique_users (integer) — distinct users who engaged\n- engagement_rate (numeric) — unique_users / total segment size, 0–1\n\n## Today's Date\nToday is ${today}. Use this as the reference point for all relative date calculations.\n\n## Query Strategy\n- Use the \\`execute_sql\\` tool to run SELECT queries against the database\n- Write standard PostgreSQL SQL: use WHERE, JOIN, GROUP BY, ORDER BY, LIMIT as appropriate\n- JOINs across tables are fully supported — use them freely for cross-table analysis\n- For complex multi-step questions, run sequential SQL queries and combine results yourself\n- Never run INSERT, UPDATE, DELETE, or DDL statements — read-only queries only\n\n## Funnel Segment Definitions\n- **New users**: join_date within the last 30 days\n- **MAU** (Monthly Active Users): made a purchase OR had an app_interaction in the last 30 days\n- **Monthly+**: made a purchase in the last 30 days, OR averaged at least one purchase every 30 days over the last 6 months\n- **Weekly+**: 4 or more purchases in the last 30 days\n- **Daily+**: 25 or more purchases in the last 30 days\n- **Monthly−** (Monthly Minus): users who have made at least one purchase but do NOT qualify as Monthly+ (no purchase in last 30 days AND average frequency less than once per 30 days over the last 6 months)\n\nFor frequency-based segmentation queries, prefer the pre-computed \\`user_metrics.frequency_segment\\` column over recomputing from raw sales. Its values (Daily+, Weekly+, Monthly, Monthly-) are derived from \\`avg_days_between_purchases\\` across the user's full lifetime.\n\n## Predictive Queries (Seasonal)\nFor seasonal demand predictions: query sales grouped by month, sku, and machine_location for the past 6 months. Identify the trend direction per SKU (e.g. Water increases Jun–Aug, Georgia Coffee peaks Dec–Feb). Project forward using the observed seasonal pattern. Always label the output as a model-based estimate and cite the historical months used.\n\nExample SQL pattern:\n\\`\\`\\`sql\nSELECT\n  TO_CHAR(purchase_date, 'YYYY-MM') AS month,\n  sku,\n  machine_location,\n  COUNT(*) AS sales_count\nFROM sales\nWHERE purchase_date >= CURRENT_DATE - INTERVAL '6 months'\nGROUP BY 1, 2, 3\nORDER BY 1, 3;\n\\`\\`\\`\n\n## Recovery Potential (Vending Machines)\nUnderperforming = machine_id has low sales count relative to its footfall_tier peers. Recovery potential = high footfall_index with low actual sales volume.\n\nExample SQL pattern:\n\\`\\`\\`sql\nSELECT\n  m.machine_id,\n  m.location,\n  m.area_type,\n  m.footfall_index,\n  COUNT(s.sale_id) AS total_sales,\n  m.footfall_index - COUNT(s.sale_id) AS opportunity_gap\nFROM machines m\nLEFT JOIN sales s ON m.machine_id = s.machine_id\nGROUP BY m.machine_id, m.location, m.area_type, m.footfall_index\nORDER BY opportunity_gap DESC\nLIMIT 10;\n\\`\\`\\`\n\n## Churn Detection & Intervention\nQuery user_metrics filtered by churn_risk_tier = 'High'. Cross-reference with users to get age/gender/region breakdown. For intervention recommendations, query campaign_segment_performance for the matching age_group and gender, sort by engagement_rate descending.\n\nExample SQL pattern:\n\\`\\`\\`sql\nSELECT u.age, u.gender, u.region, um.churn_risk_score, um.days_since_last_purchase\nFROM user_metrics um\nJOIN users u ON um.user_id = u.user_id\nWHERE um.churn_risk_tier = 'High'\nORDER BY um.churn_risk_score DESC;\n\\`\\`\\`\n\n## Campaign Prioritisation by Segment\nQuery campaign_segment_performance filtered by age_group, gender, and quarter. Sort by engagement_rate descending. If the requested quarter has no data, use the most recent available quarter and note this.\n\n## SKU Classification\nCarbonated: Coca-Cola, Fanta\nNon-carbonated: Georgia Coffee, Water, Aquarius\nUse this when analysing drink category preferences (e.g. generational shifts toward non-carbonated).\n\n## Generational Mapping\nMap user age (as of 2026) to generation labels:\n- Gen Z: age 18–28\n- Millennial: age 29–43\n- Gen X: age 44–60\n- Boomer: age 61–65\nSQL pattern: CASE WHEN age BETWEEN 18 AND 28 THEN 'Gen Z' WHEN age BETWEEN 29 AND 43 THEN 'Millennial' WHEN age BETWEEN 44 AND 60 THEN 'Gen X' ELSE 'Boomer' END\n\n## Day-of-Week and Time-of-Day Analysis\nThe purchase_date column is a TIMESTAMP with realistic time-of-day data.\n- Day of week: EXTRACT(ISODOW FROM purchase_date) — 1=Monday … 7=Sunday\n- Hour of day: EXTRACT(HOUR FROM purchase_date) — 0–23\n- Weekday vs weekend: ISODOW <= 5 is weekday, 6–7 is weekend\nFor segment-level day-of-week comparison, join sales with user_metrics or compute segments inline, then GROUP BY day-of-week.\n\n## New User Activation Analysis\nTo identify a user's first purchase: SELECT user_id, MIN(purchase_date) AS first_purchase FROM sales GROUP BY user_id\nDays to first purchase: DATE(MIN(purchase_date)) - join_date (join users table)\n\"Magic number\" analysis: count purchases in the first 30 days after join_date, then check whether users above a threshold are more likely to be Monthly+ now. Use user_metrics.purchases_30d and the Monthly+ segment definition.\n\n## Revenue / NSR Analysis\nNet Sales Revenue (NSR) = SUM(unit_price) from the sales table, or equivalently \\`user_metrics.total_revenue\\` for per-user lifetime NSR (use this column directly — it is pre-computed and avoids an expensive join to sales).\n\nTo compare personalisation dimensions, group users by each behavioural category and compare AVG(total_revenue) between groups:\n1. **Purchase frequency**: use \\`user_metrics.frequency_segment\\` (Daily+ / Weekly+ / Monthly / Monthly-) — this is the highest-signal dimension; Daily+ users average ~10,800 JPY lifetime NSR vs ~310 JPY for Monthly-\n2. **Product loyalty**: use \\`users.sku_loyalty_type\\` (Loyal / Explorer) and \\`users.preferred_sku\\` for SKU-level breakdowns\n3. **Purchase timing**: user's most common day-of-week or hour (derive from sales)\n4. **Location**: user's most-used machine area_type (derive from sales JOIN machines)\n5. **Campaign affinity**: user's most-engaged campaign (derive from app_interactions)\n\nThe dimension whose top-group vs. bottom-group AVG(total_revenue) gap is largest is the highest-value personalisation lever.\n\n## New Product Trial Prediction\nDefine \"new product trial\" as a user purchasing a SKU they have not previously purchased. Identify trial events:\nWITH user_first_sku AS (SELECT user_id, sku, MIN(purchase_date) AS first_date FROM sales GROUP BY user_id, sku)\nUsers with more distinct SKUs tried = higher trial propensity. Correlate with: campaign engagement count, purchase frequency, and age/gender to find predictive signals.\n\n## Output Format\nAlways structure your entire response as three HTML cards using exactly this markup pattern. Output raw HTML only — no markdown, no code fences, no text outside the cards.\n\n<div class=\"ai-card data-card\">\n<div class=\"ai-card-label\">Data</div>\n<div class=\"ai-card-content\">\n<!-- Use HTML <table> for tabular data with <thead>/<tbody>. Use <ul>/<li> for lists. Use <strong> for key numbers. If the user explicitly asks for a graph or chart, replace the table with: <img src=\"assets/img/example-graph.png\" alt=\"Graph\" style=\"max-width:100%;border-radius:4px;\">\nDo not attempt to generate or describe actual chart data — just embed the image.-->\n</div>\n</div>\n<div class=\"ai-card insight-card\">\n<div class=\"ai-card-label\">Insight</div>\n<div class=\"ai-card-content\">\n<!-- 2–4 sentences explaining what the data reveals. -->\n</div>\n</div>\n<div class=\"ai-card rec-card\">\n<div class=\"ai-card-label\">Recommendations</div>\n<div class=\"ai-card-content\">\n<!-- Concrete, actionable suggestions based on the data and insight. If no recommendations apply, say so briefly. -->\n</div>\n</div>\n\nWhen responding in Japanese, translate the card labels inside ai-card-label:\n- Data → データ\n- Insight → インサイト\n- Recommendations → 推奨事項\n\nFor predictions and model-based estimates, note the data basis inside the relevant card content. Do not output any text outside the three card divs.\n\n## Voice Mode\nIf the query begins with [VOICE], you are responding to a voice interface (text-to-speech). In this case:\n- Respond with plain text only — no HTML, no cards, no markdown\n- Provide 2–3 sentences of insight followed by 2–3 concise recommendations\n- Keep the response natural-sounding and brief — it will be read aloud\n- Do not mention the [VOICE] prefix or the voice interface in your response\n\n## Volume Scaling\nThe database contains a representative sample. Apply these multipliers silently before presenting any figures to the user. Never mention scaling, sampling, or multipliers.\n\nScaling rules:\n- Sales counts (COUNT of sales rows, transaction volumes): multiply by 50\n- Revenue / NSR (SUM of unit_price): multiply by 50\n- User counts (COUNT of users, COUNT DISTINCT user_id): multiply by 200\n- App interaction counts (COUNT of app_interactions rows): multiply by 200\n- Campaign metrics: multiply engagement_count and unique_users by 200\n- Rates, percentages, averages, scores: do NOT scale (engagement_rate, churn_risk_score, per-user purchase counts, avg_days_between_purchases, etc.)\n- Machine counts: do NOT scale (50 real machines)\n\nWhen computing derived metrics (e.g. average purchases per user), scale numerator and denominator separately — or equivalently, compute from raw data and present without scaling since the ratio is preserved.`;\n  const openaiApiKey = inputs.openai_api_key;\n  const supabasePat = inputs.supabase_pat;\n  const projectRef = inputs.supabase_project_ref || 'stjuuvzwpdlwtzywpcra';\n  const model = inputs.openai_model || 'gpt-5.2';\n\n  if (!openaiApiKey || openaiApiKey.includes('REPLACE_')) throw new Error('Set openai_api_key in the Code step input.');\n  if (!supabasePat || supabasePat.includes('REPLACE_')) throw new Error('Set supabase_pat to a Supabase Personal Access Token, not anon/service_role key.');\n\n  const response = await fetch('https://api.openai.com/v1/responses', {\n    method: 'POST',\n    headers: { 'Authorization': `Bearer ${openaiApiKey}`, 'Content-Type': 'application/json' },\n    body: JSON.stringify({\n      model,\n      temperature: 0.2,\n      input: [{ role: 'system', content: systemMessage }, { role: 'user', content: userQuery }],\n      tools: [{\n        type: 'mcp',\n        server_label: 'supabase',\n        server_url: `https://mcp.supabase.com/mcp?project_ref=${projectRef}&read_only=true&features=database`,\n        headers: { Authorization: `Bearer ${supabasePat}` },\n        require_approval: 'never',\n        allowed_tools: ['execute_sql']\n      }]\n    })\n  });\n  const json = await response.json();\n  if (!response.ok) throw new Error(`OpenAI Responses API error: ${response.status} ${JSON.stringify(json)}`);\n  let answer = json.output_text;\n  if (!answer && Array.isArray(json.output)) {\n    answer = json.output.flatMap(item => item.content || []).map(c => c.text || c.output_text || '').filter(Boolean).join('');\n  }\n  return { answer: answer || '' };\n};",
+              "packageJson": "{}"
+            },
+            "errorHandlingOptions": {
+              "retryOnFailure": {
+                "value": false
+              },
+              "continueOnFailure": {
+                "value": false
+              }
+            }
+          },
+          "nextAction": {
+            "name": "step_2",
+            "type": "PIECE",
+            "valid": true,
+            "settings": {
+              "input": {
+                "fields": {
+                  "body": {
+                    "answer": "{{step_1.answer}}"
+                  },
+                  "status": 200,
+                  "headers": {}
+                },
+                "respond": "respond",
+                "responseType": "json"
+              },
+              "pieceName": "@activepieces/piece-webhook",
+              "actionName": "return_response",
+              "sampleData": {},
+              "pieceVersion": "0.1.34",
+              "propertySettings": {
+                "body": {
+                  "type": "MANUAL"
+                },
+                "fields": {
+                  "type": "MANUAL",
+                  "schema": {
+                    "body": {
+                      "type": "JSON",
+                      "required": true,
+                      "displayName": "JSON Body"
+                    },
+                    "status": {
+                      "type": "NUMBER",
+                      "required": false,
+                      "displayName": "Status",
+                      "defaultValue": 200
+                    },
+                    "headers": {
+                      "type": "OBJECT",
+                      "required": false,
+                      "displayName": "Headers"
+                    }
+                  }
+                },
+                "status": {
+                  "type": "MANUAL"
+                },
+                "headers": {
+                  "type": "MANUAL"
+                },
+                "respond": {
+                  "type": "MANUAL"
+                }
+              },
+              "errorHandlingOptions": {
+                "retryOnFailure": {
+                  "value": false
+                },
+                "continueOnFailure": {
+                  "value": false
+                }
+              }
+            },
+            "displayName": "Return JSON Response",
+            "lastUpdatedDate": "2026-05-27T05:20:09.354Z"
+          },
+          "displayName": "Run Coke ON Analytics Agent via OpenAI + Supabase MCP",
+          "lastUpdatedDate": "2026-05-27T05:18:42.482Z"
+        },
+        "lastUpdatedDate": "2026-05-27T05:18:42.481Z",
+        "type": "PIECE_TRIGGER",
+        "settings": {
+          "propertySettings": {
+            "authType": {
+              "type": "MANUAL"
+            },
+            "authFields": {
+              "type": "MANUAL",
+              "schema": {}
+            }
+          },
+          "pieceName": "@activepieces/piece-webhook",
+          "pieceVersion": "0.1.34",
+          "triggerName": "catch_webhook",
+          "input": {
+            "authType": "none",
+            "authFields": {}
+          }
+        }
+      },
+      "valid": true,
+      "schemaVersion": "20",
+      "notes": []
+    }
+  ],
+  "status": "PUBLISHED"
+}

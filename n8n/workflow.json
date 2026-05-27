@@ -83,12 +83,7 @@
         1712,
         1168
       ],
-      "credentials": {
-        "openAiApi": {
-          "id": "cTx2I3UnkMhT1tbl",
-          "name": "OpenAi account"
-        }
-      }
+      "credentials": {}
     },
     {
       "parameters": {
@@ -107,7 +102,7 @@
     {
       "parameters": {
         "endpointUrl": "https://mcp.supabase.com/mcp?project_ref=stjuuvzwpdlwtzywpcra&read_only=true&features=database",
-        "authentication": "headerAuth",
+        "authentication": "",
         "options": {}
       },
       "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
@@ -118,12 +113,7 @@
       ],
       "id": "a3c8980c-5a4d-41f4-b72a-130fd460e55a",
       "name": "Supabase MCP Client",
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "3LzjwCGm5RjSQsTF",
-          "name": "Supabase Header Auth"
-        }
-      }
+      "credentials": {}
     }
   ],
   "pinData": {},

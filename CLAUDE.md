@@ -17,6 +17,7 @@ No pip dependencies — stdlib only.
 **Open the frontend:**
 ```
 open frontend/index.html
+ruby -run -e httpd frontend -p 5500 -b 127.0.0.1
 ```
 No build step. Webhook URL is configured in `frontend/assets/js/config.js` — edit that file, not `index.html`.
 
