@@ -61,6 +61,8 @@ const CONFIG = {
 
 Open `frontend/index.html` directly in a browser (no server needed).
 
+or run `ruby -run -e httpd frontend -p 5500 -b 127.0.0.1`
+
 Or test the webhook directly (use the test URL while the workflow is open in n8n, production URL otherwise):
 
 ```bash
