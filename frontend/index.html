@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Coke ON Analytics</title>
+  <title>16 Bars Analytics</title>
   <script src="assets/js/config.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link
@@ -16,12 +16,12 @@
 
 <header>
   <div class="logo">
-    <!-- Coca-Cola bottle silhouette SVG -->
-    <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <!-- 16 Bars silhouette SVG -->
+    <!-- <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <circle cx="16" cy="16" r="15" fill="white" fill-opacity="0.2"/>
       <text x="16" y="21" text-anchor="middle" font-size="14" font-weight="bold" fill="white" font-family="sans-serif">ON</text>
-    </svg>
-    <span class="logo-text" data-i18n="title">Coke ON Analytics</span>
+    </svg> -->
+    <span class="logo-text" data-i18n="title">16 Bars Analytics</span>
   </div>
   <div class="lang-toggle" role="group" aria-label="Language">
     <button class="lang-btn active" data-lang="en" onclick="setLang('en')">EN</button>
@@ -61,7 +61,7 @@
 </main>
 
 <footer>
-  <span data-i18n="footer">Coke ON Analytics POC — synthetic data only</span>
+  <span data-i18n="footer">16 Bars Analytics POC — synthetic data only</span>
 </footer>
 
 <script>
@@ -72,23 +72,23 @@
   // ── i18n strings ─────────────────────────────────────────────────────────
   const STRINGS = {
     en: {
-      title: "Coke ON Analytics",
+      title: "16 Bars Analytics",
       suggestionsLabel: "Try asking",
-      placeholder: "Ask a question about Coke ON users, sales, or app activity…",
+      placeholder: "Ask a question about 16 Bars users, sales, or app activity…",
       submit: "Ask",
       responseLabel: "Answer",
-      footer: "Coke ON Analytics POC — synthetic data only",
+      footer: "16 Bars Analytics POC — synthetic data only",
       loading: "Thinking…",
       errorNetwork: "Could not reach the analytics service. Is n8n running?",
       errorServer: "The service returned an error. Please try again.",
     },
     ja: {
-      title: "Coke ON アナリティクス",
+      title: "16 Bars アナリティクス",
       suggestionsLabel: "例えばこんな質問",
-      placeholder: "Coke ONのユーザー、売上、アプリ活動について質問してください…",
+      placeholder: "16 Barsのユーザー、売上、アプリ活動について質問してください…",
       submit: "質問する",
       responseLabel: "回答",
-      footer: "Coke ON アナリティクス POC — 合成データのみ",
+      footer: "16 Bars アナリティクス POC — 合成データのみ",
       loading: "考え中…",
       errorNetwork: "サービスに接続できません。n8nは起動していますか？",
       errorServer: "サービスでエラーが発生しました。もう一度お試しください。",
@@ -326,7 +326,7 @@
         <circle cx="16" cy="16" r="15" fill="#E4002B" fill-opacity="0.9"/>
         <text x="16" y="21" text-anchor="middle" font-size="14" font-weight="bold" fill="white" font-family="sans-serif">ON</text>
       </svg>
-      <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#1a1a1a;">Coke ON Analytics</h2>
+      <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:#1a1a1a;">16 Bars Analytics</h2>
     </div>
     <input
       type="password"
@@ -343,30 +343,30 @@
 </div>
 
 <script>
-  (function () {
-    const SESSION_KEY = 'coke_on_auth';
-    const overlay = document.getElementById('auth-overlay');
+  // (function () {
+  //   const SESSION_KEY = '16_bars_auth';
+  //   const overlay = document.getElementById('auth-overlay');
 
-    if (sessionStorage.getItem(SESSION_KEY) === '1') return;
+  //   if (sessionStorage.getItem(SESSION_KEY) === '1') return;
 
-    overlay.style.display = 'flex';
+  //   overlay.style.display = 'flex';
 
-    function attempt() {
-      if (document.getElementById('auth-input').value === CONFIG.PASSWORD) {
-        sessionStorage.setItem(SESSION_KEY, '1');
-        overlay.style.display = 'none';
-      } else {
-        document.getElementById('auth-error').style.display = 'block';
-        document.getElementById('auth-input').value = '';
-        document.getElementById('auth-input').focus();
-      }
-    }
+  //   function attempt() {
+  //     if (document.getElementById('auth-input').value === CONFIG.PASSWORD) {
+  //       sessionStorage.setItem(SESSION_KEY, '1');
+  //       overlay.style.display = 'none';
+  //     } else {
+  //       document.getElementById('auth-error').style.display = 'block';
+  //       document.getElementById('auth-input').value = '';
+  //       document.getElementById('auth-input').focus();
+  //     }
+  //   }
 
-    document.getElementById('auth-submit').addEventListener('click', attempt);
-    document.getElementById('auth-input').addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') attempt();
-    });
-  })();
+  //   document.getElementById('auth-submit').addEventListener('click', attempt);
+  //   document.getElementById('auth-input').addEventListener('keydown', function (e) {
+  //     if (e.key === 'Enter') attempt();
+  //   });
+  // })();
 </script>
 </body>
 </html>
